@@ -95,10 +95,8 @@ function createUser(userName, password, firstName, lastName, email){
 
   userIDs = findAllUserIds();
   userID = getRandomInt(1,99999)
-  while (userIDs.includes(userID) == true) {
-    userID = getRandomInt(1,99999)
-  }
-
+  userID = userID.toString()
+  
   const item = {
     userID : userID,
     userName : userName,
@@ -120,7 +118,7 @@ function createUser(userName, password, firstName, lastName, email){
 
 function createProject(projectName, listKPIs){
   projectIDs = findAllProjectIDs();
-  projectID = getRandomInt(1,99999)
+  projectID = getRandomInt(1,99999);
   while (projectIDs.includes(projectID) == true){
     projectID = getRandomInt(1,99999)
   }
@@ -149,6 +147,7 @@ function findAllUserIds(){
       console.error('Error scanning DynamoDB table', err);
     } else {
       const userIDs = data.Items.map(item => item.userID);
+      console.log(userIDs);
     }
     return userIDs
   });
@@ -234,3 +233,10 @@ function getRandomInt(min, max){
   //     }
   //   })
   // }
+  module.exports = {
+    createUser,
+    createProject,
+    findAllUserIds,
+    findAllProjectIDs,
+    getRandomInt,
+  };

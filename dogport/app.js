@@ -1,14 +1,20 @@
 // app.js
-import db from "dynamo.js";
+const db = require("./dynamo.js");
+const cors = require('cors');
+const cookieParser = require("cookie-parser");
 
-import express from 'express';
+const express = require('express');
 const app = express();
-const port = 3000;
+const port = 3001;
+
+app.use(cookieParser());
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
 
+// enabling CORS for all routes
+app.use(cors());
 /**
  * Starts server and listens on port port
  */
@@ -51,3 +57,9 @@ app.get('/api/readUserProjects', (req, res) => {
 
 });
 
+app.get('/api/testuser',(req,res) => {
+  db.createUser("javi", "password", "javier", "refugio", "javierrcota@arizona.edu");
+  res.status(201).json({
+    message: 'User Created successfully'
+  });
+});
