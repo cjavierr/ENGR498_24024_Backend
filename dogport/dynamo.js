@@ -154,6 +154,33 @@ function findAllUserIds(){
 }
 
 /**
+ * Finds a user and returns their user object from user table
+ * @returns {user} - User object
+ */
+async function getUser(userName) {
+  const params = {
+    TableName: 'users',
+    IndexName: 'usernameIndex',
+    KeyConditionExpression: 'userName = :username',
+    ExpressionAttributeValues: {
+      ':username': userName
+    }
+  };
+
+  try {
+    const data = await docClient.query(params).promise();
+    if (data.Items.length > 0) {
+      console.log(data.Items[0]);
+      return data.Items[0]; // return the first user object if found
+    } else {
+      console.log('User not found');
+      return null; // return null if no user is found
+    }
+  } catch (err) {
+    console.error('Error scanning DynamoDB table', err);
+  }
+}
+/**
  * Finds and returns all taken ProjectIDs in the projects table
  * @returns {Array[String]} - the list of Project Ids
  */
@@ -239,4 +266,5 @@ function getRandomInt(min, max){
     findAllUserIds,
     findAllProjectIDs,
     getRandomInt,
+    getUser,
   };
