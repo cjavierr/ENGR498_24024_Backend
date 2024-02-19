@@ -46,7 +46,10 @@ app.post('/api/newuser', (req, res) => {
  * 
  */
 app.post('/api/createNewProject', (req, res) => {
-
+  const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+  const userID = jwtInfo.userID;
+  console.log(req.body, userID)
+  db.createProject(req.body.projectName, userID, req.body.listKPIs, req.body.projectDescription);
 });
 
 /**
