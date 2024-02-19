@@ -95,10 +95,8 @@ function createUser(userName, password, firstName, lastName, email){
 
   userIDs = findAllUserIds();
   userID = getRandomInt(1,99999)
-  while (userIDs.includes(userID) == true) {
-    userID = getRandomInt(1,99999)
-  }
-
+  userID = userID.toString()
+  
   const item = {
     userID : userID,
     userName : userName,
@@ -120,7 +118,7 @@ function createUser(userName, password, firstName, lastName, email){
 
 function createProject(projectName, listKPIs){
   projectIDs = findAllProjectIDs();
-  projectID = getRandomInt(1,99999)
+  projectID = getRandomInt(1,99999);
   while (projectIDs.includes(projectID) == true){
     projectID = getRandomInt(1,99999)
   }
@@ -149,11 +147,39 @@ function findAllUserIds(){
       console.error('Error scanning DynamoDB table', err);
     } else {
       const userIDs = data.Items.map(item => item.userID);
+      console.log(userIDs);
     }
     return userIDs
   });
 }
 
+/**
+ * Finds a user and returns their user object from user table
+ * @returns {user} - User object
+ */
+async function getUser(userName) {
+  const params = {
+    TableName: 'users',
+    IndexName: 'usernameIndex',
+    KeyConditionExpression: 'userName = :username',
+    ExpressionAttributeValues: {
+      ':username': userName
+    }
+  };
+
+  try {
+    const data = await docClient.query(params).promise();
+    if (data.Items.length > 0) {
+      console.log(data.Items[0]);
+      return data.Items[0]; // return the first user object if found
+    } else {
+      console.log('User not found');
+      return null; // return null if no user is found
+    }
+  } catch (err) {
+    console.error('Error scanning DynamoDB table', err);
+  }
+}
 /**
  * Finds and returns all taken ProjectIDs in the projects table
  * @returns {Array[String]} - the list of Project Ids
@@ -234,3 +260,11 @@ function getRandomInt(min, max){
   //     }
   //   })
   // }
+  module.exports = {
+    createUser,
+    createProject,
+    findAllUserIds,
+    findAllProjectIDs,
+    getRandomInt,
+    getUser,
+  };
