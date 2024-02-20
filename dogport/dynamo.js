@@ -227,6 +227,24 @@ function getRandomInt(min, max){
       }
     });
   };
+
+  async function queryProjectsWithUserId(userId) {
+    const params = {
+      TableName: 'projects'
+    };
+  
+    try {
+      const data = await docClient.scan(params).promise();
+      items = data.Items;
+      const filteredItems = items.filter(item => {
+        return item.projectUsers.some(user => user.userID === userId);
+      });
+      console.log('Filtered items:', filteredItems); 
+      return filteredItems;
+    } catch (err) {
+      console.error('Error querying items from DynamoDB', err);
+    }
+  }
   
   // function updateItem(){
   //   const params = {
@@ -271,4 +289,5 @@ function getRandomInt(min, max){
     findAllProjectIDs,
     getRandomInt,
     getUser,
+    queryProjectsWithUserId
   };
