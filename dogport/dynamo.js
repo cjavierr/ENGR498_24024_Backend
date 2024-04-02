@@ -68,19 +68,18 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  * @param {*} table 
  * @param {*} value 
  */
-function createItem (table, value){
+async function createItem (table, value){
   const params = {
     TableName: table,
     Item: value
   };
   
-  docClient.put(params, (err, data) => {
-    if(err){
-      console.error('Error adding item to DynamoDB', err);
-    } else {
-      console.log('Item added successfully', data)
-    }
-  });
+  try {
+    const data = await docClient.put(params).promise();
+    console.log('Item added successfully', data);
+  } catch (err) {
+    console.error('Error adding item to DynamoDB', err);
+  }
 }
 
 /**
@@ -116,18 +115,23 @@ function createUser(userName, password, firstName, lastName, email){
  * @param {Array[String]} listKPIs 
  */
 
-function createProject(projectName, listKPIs){
+function createProject(projectName, ownerID, listKPIs, projectDescription){
   projectIDs = findAllProjectIDs();
-  projectID = getRandomInt(1,99999);
-  while (projectIDs.includes(projectID) == true){
-    projectID = getRandomInt(1,99999)
-  }
-
+  projectID = getRandomInt(1,999);
+  projectID = "CAT-" + projectID.toString();  
+  // while (projectIDs.includes(projectID) == true){
+  //   projectID = getRandomInt(1,99999)
+  // }
+  const projectUsers = [{userID: ownerID, role: "owner"}]
   const item = {
     projectID : projectID,
     projectName : projectName,
-    kpis : []
+    projectUsers : projectUsers,
+    kpis : listKPIs,
+    projectDescription : projectDescription
   }
+  console.log(item)
+  createItem("projects", item)
 }
 
 
@@ -223,6 +227,24 @@ function getRandomInt(min, max){
       }
     });
   };
+
+  async function queryProjectsWithUserId(userId) {
+    const params = {
+      TableName: 'projects'
+    };
+  
+    try {
+      const data = await docClient.scan(params).promise();
+      items = data.Items;
+      const filteredItems = items.filter(item => {
+        return item.projectUsers.some(user => user.userID === userId);
+      });
+      console.log('Filtered items:', filteredItems); 
+      return filteredItems;
+    } catch (err) {
+      console.error('Error querying items from DynamoDB', err);
+    }
+  }
   
   // function updateItem(){
   //   const params = {
@@ -267,4 +289,5 @@ function getRandomInt(min, max){
     findAllProjectIDs,
     getRandomInt,
     getUser,
+    queryProjectsWithUserId
   };
