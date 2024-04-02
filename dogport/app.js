@@ -95,8 +95,10 @@ app.post("/api/login", async (req, res) => {
 app.post('/api/createDashboard', async (req, res) => {
   const reqData = req.body;
 
+  const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+  const userID = jwtInfo.userID;
   try {
-    await db.createDashboard(reqData.dashboardName, reqData.projectID, reqData.ownerid,
+    await db.createDashboard(reqData.dashboardName, reqData.projectID, userID,
       reqData.category, reqData.columnNames, reqData.rowNames, reqData.values);
     res.status(201).json({
       message: 'Dashboard created successfully'
