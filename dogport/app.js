@@ -101,3 +101,25 @@ app.post("/api/login", async (req, res) => {
 
   res.status(200).json();
 });
+
+/**
+ * 
+ */
+app.post('/api/createDashboard', async (req, res) => {
+  const reqData = req.body;
+
+  const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+  const userID = jwtInfo.userID;
+  try {
+    await db.createDashboard(reqData.dashboardName, reqData.projectID, userID,
+      reqData.category, reqData.columnNames, reqData.rowNames, reqData.values);
+    res.status(201).json({
+      message: 'Dashboard created successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error creating dashboard',
+      error: error.toString()
+    });
+  }
+});

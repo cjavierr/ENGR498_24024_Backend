@@ -245,7 +245,72 @@ function getRandomInt(min, max){
       console.error('Error querying items from DynamoDB', err);
     }
   }
-  
+
+  /**
+   * Finds a project by its projectID and modifies it
+   * @param {String} projectID 
+   * @param {Object} updateValues - An object containing the keys and values to be updated
+   */
+  async function updateProject(projectID, updateValues) {
+    const params = {
+      TableName: 'projects',
+      Key: {
+        'projectID': projectID
+      },
+      ExpressionAttributeNames: {},
+      ExpressionAttributeValues: {},
+      UpdateExpression: 'SET',
+    };
+
+    let prefix = '';
+    const attributes = Object.keys(updateValues);
+    for (let i = 0; i < attributes.length; i++) {
+      params.UpdateExpression += prefix + '#' + attributes[i] + ' = :' + attributes[i];
+      params.ExpressionAttributeNames['#' + attributes[i]] = attributes[i];
+      params.ExpressionAttributeValues[':' + attributes[i]] = updateValues[attributes[i]];
+      prefix = ', ';
+    }
+
+    try {
+      const data = await docClient.update(params).promise();
+      console.log('Project updated successfully', data);
+    } catch (err) {
+      console.error('Error updating project in DynamoDB', err);
+    }
+  }
+
+  module.exports.updateProject = updateProject;
+/**
+ * Public Creates a dashboard in dashboards using given dashboardname, projectID
+ * ColumnNamnes, rowNames and values
+ * @param {String} dashboardName 
+ * @param {String} projectID 
+ * @param {String} ownerid 
+ * @param {String} category  
+ * @param {Array[String]} columnNames
+ * @param {Array[String]} rowNames
+ * @param {Array[Array[Number]]} values
+ 0
+ */
+
+async function createDashboard(dashboardName, projectID, ownerid, category, columnNames, rowNames, values){
+  dashid = getRandomInt(1,99999).toString();
+  dashid = "CAT-" + dashid;
+
+  const item = {
+    dashid : dashid,
+    dashboardName : dashboardName,
+    projectID : projectID,
+    ownerid : ownerid,
+    category : category,
+    columnNames : columnNames,
+    rowNames : rowNames,
+    values : values
+  }
+
+  createItem("dashboards", item)
+  updateProject(projectID, {dashboards: dashid})
+  }
   // function updateItem(){
   //   const params = {
   //     Key: {
@@ -289,5 +354,6 @@ function getRandomInt(min, max){
     findAllProjectIDs,
     getRandomInt,
     getUser,
-    queryProjectsWithUserId
+    queryProjectsWithUserId,
+    createDashboard,
   };
