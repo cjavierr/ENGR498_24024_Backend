@@ -224,6 +224,34 @@ function getRandomInt(min, max){
     });
   };
   
+/**
+ * Public Creates a dashboard in dashboards using given dashboardname, projectID
+ * ColumnNamnes, rowNames and values
+ * @param {String} dashboardName 
+ * @param {Number} projectID 
+ * @param {String} category  
+ * @param {Array[String]} columnNames
+ * @param {Array[String]} rowNames
+ * @param {Array[Array[Number]]} values
+ 0
+ */
+
+function createDashboard(dashboardName, projectID, category, columnNames, rowNames, values){
+  dashboardID = getRandomInt(1,99999).toString();
+  dashboardID = "CAT-" + dashboardID;
+
+  const item = {
+    dashboardID : dashboardID,
+    dashboardName : dashboardName,
+    projectID : projectID,
+    category : category,
+    columnNames : columnNames,
+    rowNames : rowNames,
+    values : values
+  }
+
+  createItem("dashboards", item)
+  }
   // function updateItem(){
   //   const params = {
   //     Key: {
