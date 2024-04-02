@@ -46,7 +46,10 @@ app.post('/api/newuser', (req, res) => {
  * 
  */
 app.post('/api/createNewProject', (req, res) => {
-
+  const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+  const userID = jwtInfo.userID;
+  console.log(req.body, userID)
+  db.createProject(req.body.projectName, userID, req.body.listKPIs, req.body.projectDescription);
 });
 
 /**
@@ -63,8 +66,18 @@ app.post('/api/addUserToProject', (req, res) => {
 /**
  * 
  */
-app.get('/api/readUserProjects', (req, res) => {
+app.get('/api/readUserProjects', async (req, res) => {
+  try {
+    const userID = jwt.verify(req.cookies.token, "ibby").userID;
+    const projects = await db.queryProjectsWithUserId(userID);
 
+    console.log('Projects:', projects);
+    
+    res.status(200).json({ projects }); // Sending projects as JSON response
+  } catch (err) {
+    console.error('Error in readUserProjects:', err);
+    res.status(500).json({ error: 'Internal server error' }); // Sending an error response
+  }
 });
 
 app.post("/api/login", async (req, res) => {
