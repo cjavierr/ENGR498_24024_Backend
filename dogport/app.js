@@ -123,8 +123,9 @@ app.post('/api/createDashboard', async (req, res) => {
     });
   }
 });
+
 /**
- * Get request to retrieve qualitative KPI for a specific project
+ * POST to get qualitativeKPIS for testing purposes
  */
 app.post('/api/getQualitativeKPI', async (req, res) => {
   try {
@@ -137,6 +138,24 @@ app.post('/api/getQualitativeKPI', async (req, res) => {
     res.status(200).json({ qualitativeKPI }); // Sending qualitative KPI as JSON response
   } catch (err) {
     console.error('Error in getQualitativeKPI:', err);
-    res.status(500).json({ error: 'Internal server error' }); // Sending an error response
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to get qualitativeKPIS for testing purposes
+ */
+app.post('/api/addKPI', async (req, res) => {
+  try {
+    const reqData = req.body;
+    projectID = reqData.projectID;
+    tableName = reqData.tableName;
+    newEntry = reqData.newEntry;
+    await db.addQualitativeKPI(projectID, tableName, newEntry);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in addQualitativeKPI:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
   }
 });

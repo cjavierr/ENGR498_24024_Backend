@@ -312,7 +312,21 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
   createItem("dashboards", item)
   updateProject(projectID, {dashboards: dashid})
   }
+
+  // Helper function to append items to kpi tables
+  function appendToTable(qualitativeKPIs, tableName, newEntry) {
+    // Finds table with tableName parameter
+    const table = qualitativeKPIs.find(kpi => kpi.name === tableName);
   
+    // If the table exists, append the new entry to its table array
+    if (table) {
+      table.table.push(newEntry);
+    } else {
+      // If the table doesn't exist, log an error message
+      console.error(`Table ${tableName} not found`);
+    }
+  }
+
   /**
    * Queries the projects table and returns the qualitative KPIs for a given projectID
    * @param {String} projectID 
@@ -331,6 +345,33 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
       return data.Item.qualitativeKPIs;
     } catch (err) {
       console.log('Error querying DynamoDB', err);
+    }
+  }
+
+  async function addQualitativeKPI(projectID, tableName, newEntry) {
+    // Retrieve the current qualitative KPIs for the project
+    const currentKPIs = await getQualitativeKPIs(projectID);
+  
+    // Append the new entry to the specified table
+    appendToTable(currentKPIs, tableName, newEntry);
+    console.log(currentKPIs);
+    // Update the qualitative KPIs in DynamoDB
+    const params = {
+      TableName: 'projects',
+      Key: {
+        'projectID': projectID
+      },
+      UpdateExpression: 'SET qualitativeKPIs = :kpi',
+      ExpressionAttributeValues: {
+        ':kpi': currentKPIs
+      }
+    };
+  
+    try {
+      await docClient.update(params).promise();
+      console.log(`Added new entry to ${tableName} table for project ${projectID}`);
+    } catch (err) {
+      console.error(`Error updating qualitative KPIs for project ${projectID}`, err);
     }
   }
   // function updateItem(){
@@ -379,4 +420,5 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
     queryProjectsWithUserId,
     createDashboard,
     getQualitativeKPIs,
+    addQualitativeKPI,
   };
