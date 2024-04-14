@@ -1,3 +1,4 @@
+
 const AWS = require('aws-sdk');
 
 // Set up AWS credentials. 
@@ -311,6 +312,27 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
   createItem("dashboards", item)
   updateProject(projectID, {dashboards: dashid})
   }
+  
+  /**
+   * Queries the projects table and returns the qualitative KPIs for a given projectID
+   * @param {String} projectID 
+   * @returns {Array} - Array of qualitative KPIs
+   */
+  async function getQualitativeKPIs(projectID) {
+    const params = {
+      TableName: 'projects',
+      Key: {
+        'projectID': projectID
+      }
+    };
+
+    try {
+      const data = await docClient.get(params).promise();
+      return data.Item.qualitativeKPIs;
+    } catch (err) {
+      console.log('Error querying DynamoDB', err);
+    }
+  }
   // function updateItem(){
   //   const params = {
   //     Key: {
@@ -356,4 +378,5 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
     getUser,
     queryProjectsWithUserId,
     createDashboard,
+    getQualitativeKPIs,
   };
