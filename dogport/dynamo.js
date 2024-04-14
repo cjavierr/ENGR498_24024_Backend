@@ -374,6 +374,27 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
       console.error(`Error updating qualitative KPIs for project ${projectID}`, err);
     }
   }
+  async function emptyRisks(projectID) {
+    updateProject(projectID, {qualitativeKPIs: [
+      {
+          "name": "Risks",
+          "table": [
+          ]
+      },
+      {
+          "name": "Issues",
+          "table": [
+          ]
+      },
+      {
+          "name": "Agenda Items",
+          "table": [
+          ]
+      }
+  ]})
+    
+    }
+
   // function updateItem(){
   //   const params = {
   //     Key: {
@@ -421,4 +442,5 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
     createDashboard,
     getQualitativeKPIs,
     addQualitativeKPI,
+    emptyRisks,
   };

@@ -133,7 +133,6 @@ app.post('/api/getQualitativeKPI', async (req, res) => {
     projectID = reqData.projectID;
     const qualitativeKPI = await db.getQualitativeKPIs(projectID);
 
-    console.log(qualitativeKPI);
     
     res.status(200).json({ qualitativeKPI }); // Sending qualitative KPI as JSON response
   } catch (err) {
@@ -143,7 +142,33 @@ app.post('/api/getQualitativeKPI', async (req, res) => {
 });
 
 /**
- * POST to get qualitativeKPIS for testing purposes
+ * POST to get Risks from project ID using getQualitaitiveKPI
+ */
+app.get('/api/getRisks', async (req, res) => {
+  try {
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const projects = jwtInfo.projects;
+
+    let risks = [];
+    for (const projectID of projects) {
+      const qualitativeKPI = await db.getQualitativeKPIs(projectID);
+
+      for (const item of qualitativeKPI) {
+      if (item.name === 'Risks') {
+        risks.push({projectID: projectID, risk: item.table});
+      }
+      }
+    }
+    
+    res.status(200).json({ risks: risks }); // Sending risks table as JSON response
+  } catch (err) {
+    console.error('Error in getRisks:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to get add KPI's to kpi lists
  */
 app.post('/api/addKPI', async (req, res) => {
   try {
@@ -156,6 +181,22 @@ app.post('/api/addKPI', async (req, res) => {
     res.status(200)
   } catch (err) {
     console.error('Error in addQualitativeKPI:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to clear risks from the database
+ */
+app.post('/api/clearRisks', async (req, res) => {
+  try {
+    const reqData = req.body;
+    const projectID = reqData.projectID;
+    await db.emptyRisks(projectID);
+
+    res.status(200).json({ message: 'Risks cleared successfully' });
+  } catch (err) {
+    console.error('Error in clearRisks:', err);
     res.status(500).json({ error: 'Internal server error' }); 
   }
 });
