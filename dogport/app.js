@@ -163,10 +163,13 @@ app.get('/api/getRisks', async (req, res) => {
       const qualitativeKPI = await db.getQualitativeKPIs(projectID);
 
       for (const item of qualitativeKPI) {
-      if (item.name === 'Risks') {
-        const riskItems = item.table.map(risk => ({...risk, projectID}));
-        risks.push(...riskItems);
-      }
+        if (item.name === 'Risks') {
+          const riskItems = item.table.map(risk => {
+            const owner = risk.users[0];
+            return {...risk, projectID, owner};
+          });
+          risks.push(...riskItems);
+        }
       }
     }
     
@@ -185,10 +188,11 @@ app.get('/api/getRisks', async (req, res) => {
 app.post('/api/addKPI', async (req, res) => {
   try {
     const reqData = req.body;
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
     projectID = reqData.projectID;
     tableName = reqData.tableName;
     newEntry = reqData.newEntry;
-    newEntry.users = []; // todo add userID from jwt for inital creation
+    newEntry.users = [jwtInfo.firstName]; // todo add userID from jwt for inital creation
     await db.addQualitativeKPI(projectID, tableName, newEntry);
 
     res.status(200)
