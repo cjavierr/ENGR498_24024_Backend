@@ -70,10 +70,19 @@ app.get('/api/readUserProjects', async (req, res) => {
   try {
     const userID = jwt.verify(req.cookies.token, "ibby").userID;
     const projects = await db.queryProjectsWithUserId(userID);
-
+    const ownerName =jwt.verify(req.cookies.token, "ibby").firstName;
+    console.log('Projects:', projects);
+    const projectRecords = projects.map((project, index) => ({
+      recordNumber: project.projectID, // Replace with actual property
+      owner: ownerName, // Replace with actual property
+      ownerOrg: project.projectName, // Replace with actual property
+      dashboardNumber: project.dashboards[0], // Replace with actual property
+      dashboardName: "", // Replace with actual property
+      escalate: "no", // Replace with actual property
+    }));
     console.log('Projects:', projects);
     
-    res.status(200).json({ projects }); // Sending projects as JSON response
+    res.status(200).json({ projectRecords }); // Sending projects as JSON response
   } catch (err) {
     console.error('Error in readUserProjects:', err);
     res.status(500).json({ error: 'Internal server error' }); // Sending an error response
@@ -155,12 +164,13 @@ app.get('/api/getRisks', async (req, res) => {
 
       for (const item of qualitativeKPI) {
       if (item.name === 'Risks') {
-        risks.push({projectID: projectID, risk: item.table});
+        const riskItems = item.table.map(risk => ({...risk, projectID}));
+        risks.push(...riskItems);
       }
       }
     }
     
-    res.status(200).json({ risks: risks }); // Sending risks table as JSON response
+    res.status(200).json({ risks }); // Sending risks table as JSON response
   } catch (err) {
     console.error('Error in getRisks:', err);
     res.status(500).json({ error: 'Internal server error' }); 
@@ -169,6 +179,8 @@ app.get('/api/getRisks', async (req, res) => {
 
 /**
  * POST to get add KPI's to kpi lists
+ *  essentially creates a object from request and appends it to
+ *  the respective KPI's table. Specify which KPI using tableName
  */
 app.post('/api/addKPI', async (req, res) => {
   try {
@@ -176,6 +188,7 @@ app.post('/api/addKPI', async (req, res) => {
     projectID = reqData.projectID;
     tableName = reqData.tableName;
     newEntry = reqData.newEntry;
+    newEntry.users = []; // todo add userID from jwt for inital creation
     await db.addQualitativeKPI(projectID, tableName, newEntry);
 
     res.status(200)

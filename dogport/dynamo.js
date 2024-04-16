@@ -233,12 +233,12 @@ function getRandomInt(min, max){
     const params = {
       TableName: 'projects'
     };
-  
+
     try {
       const data = await docClient.scan(params).promise();
-      items = data.Items;
+      const items = data.Items;
       const filteredItems = items.filter(item => {
-        return item.projectUsers.some(user => user.userID === userId);
+        return item.users.includes(userId);
       });
       console.log('Filtered items:', filteredItems); 
       return filteredItems;
