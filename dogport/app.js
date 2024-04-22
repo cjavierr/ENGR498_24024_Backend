@@ -164,7 +164,10 @@ app.get('/api/getRisks', async (req, res) => {
 
       for (const item of qualitativeKPI) {
       if (item.name === 'Risks') {
-        const riskItems = item.table.map(risk => ({...risk, projectID}));
+        const riskItems = item.table.map(risk => {
+          const owner = risk.users[0];
+          return {...risk, projectID, owner};
+        });
         risks.push(...riskItems);
       }
       }
