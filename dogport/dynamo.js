@@ -1,10 +1,10 @@
-const AWS = require('aws-sdk');
+const AWS = require("aws-sdk");
 
-// Set up AWS credentials. 
+// Set up AWS credentials.
 AWS.config.update({
-  accessKeyId: 'AKIA2Q7JBQRSY2W3JK5C',
-  secretAccessKey: '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',
-  region: 'us-east-2',
+  accessKeyId: "AKIA2Q7JBQRSY2W3JK5C",
+  secretAccessKey: "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",
+  region: "us-east-2",
 });
 
 // Create Instance of DynamoDB
@@ -12,6 +12,8 @@ const dynamoDB = new AWS.DynamoDB();
 
 //Define DynamoDB document client
 const docClient = new AWS.DynamoDB.DocumentClient();
+
+const random_uuid = uuidv4();
 
 /*
  * Users are the following format
@@ -57,100 +59,291 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  *          }
  *        ]
  * }
- * 
- * 
+ *
+ *
  */
 
-
+/**
+ * Dashboards are in the following format
+ * {
+ * dashboardID : dashboardID,
+ * dashboardUsers: [
+ *                  {
+ *                    userID: userID,
+ *                    role : role
+ *                  }
+ *                  ],
+ * dashboardKPIs: [
+ *                {
+ *
+ *                }
+ *
+ *
+ *                ]
+ *
+ *
+ * }
+ *
+ *
+ *
+ *
+ *
+ */
 
 /**
  * PRIVATE Creates item value in table table
- * @param {*} table 
- * @param {*} value 
+ * @param {*} table
+ * @param {*} value
  */
-function createItem (table, value){
+async function createItem(table, value) {
   const params = {
     TableName: table,
-    Item: value
+    Item: value,
   };
-  
-  docClient.put(params, (err, data) => {
-    if(err){
-      console.error('Error adding item to DynamoDB', err);
-    } else {
-      console.log('Item added successfully', data)
-    }
-  });
+
+  try {
+    const data = await docClient
+      .put(params, (err, data) => {
+        if (err) {
+          console.error("Error adding item to DynamoDB", err);
+        } else {
+          console.log("Item added successfully", data);
+        }
+      })
+      .promise(); // Use .promise() for chaining
+  } catch (err) {
+    console.error("Error putting DynamoDB table", err);
+    throw err;
+  }
 }
 
 /**
  * PUBLIC Creates a User in the users table from a given userName and assigns a unique userID
- * @param {String} userName 
- * @param {String} firstName 
- * @param {String} lastName 
- * @param {String} email 
+ * @param {String} userName
+ * @param {String} firstName
+ * @param {String} lastName
+ * @param {String} email
  */
-function createUser(userName, password, firstName, lastName, email){
-
-
-  userIDs = findAllUserIds();
-  userID = getRandomInt(1,99999)
-  userID = userID.toString()
-  
+function createUser(userName, password, firstName, lastName, email) {
+  userID = uuidv4();
+  console.log("Creating New User with ID " + userID);
   const item = {
-    userID : userID,
-    userName : userName,
-    password : password,
-    firstName : firstName,
-    lastName : lastName,
-    email : email,
-    projects : []
-  }
+    userID: userID,
+    userName: userName,
+    password: password,
+    firstName: firstName,
+    lastName: lastName,
+    email: email,
+    projects: [],
+    dashboards: [],
+  };
 
-  createItem("users", item)
+  createItem("users", item);
 }
 
 /**
  * Public Creates a project in table projects using a given projectName and assigns a unique projectID
- * @param {String} projectName 
- * @param {Array[String]} listKPIs 
+ * @param {String} projectName
+ * @param {Array[String]} listKPIs
  */
 
-function createProject(projectName, listKPIs){
-  projectIDs = findAllProjectIDs();
-  projectID = getRandomInt(1,99999);
-  while (projectIDs.includes(projectID) == true){
-    projectID = getRandomInt(1,99999)
-  }
+async function createProject(projectDetails) {
+  const projectID = await generateProjectID();
+  try {
+    const item = {
+      ...projectDetails,
+      projectID: projectID,
+      dashboards: [],
+    };
+    console.log("Creating New Project: ", item);
 
-  const item = {
-    projectID : projectID,
-    projectName : projectName,
-    kpis : []
+    await createItem("projects", item);
+    const user = await getUser(projectDetails.projectOwner);
+    const admin = await getUser(projectDetails.orgAdmin);
+
+    console.log("Got user");
+    console.log(user);
+    await addProjectToUser(user.userID, projectID);
+    await addProjectToUser(admin.userID, projectID);
+
+
+    console.log("New Project Created: ", item);
+
+    return item; // Return the created project
+  } catch (error) {
+    console.error("Error creating project:", error);
+    throw error;
   }
 }
 
+async function deleteProject(projectId) {
+  console.log("Attempting to delete project: ", projectId)
+  const projectIdToRemove = projectId;
+  try {
+    // Step 1: Get the project details
+    const projectParams = {
+      TableName: 'projects',
+      Key: {
+        projectID: projectId
+      }
+    };
+    console.log("Getting project: ", projectParams);
+    const project = await docClient.get(projectParams).promise();
+    if (!project.Item) {
+      throw new Error('Project not found');
+    }
+    console.log("Found Project");
+
+    // Step 3: Update each user's projects list
+    const usersToUpdate = project.Item.users;
+    console.log("Users: ", usersToUpdate);
+    await Promise.all(usersToUpdate.map(async (user) => {
+      const userId = user.username;
+      const userData = await getUser(userId);
+      if (!userData) {
+        console.error(`User with username ${userId} not found`);
+        return;
+      }
+      console.log(userData);
+      const userProjects = userData.projects.filter(projectId => projectId !== projectIdToRemove);
+      console.log("New User Params: ", userProjects);
+      const userParams = {
+        TableName: 'users',
+        Key: {
+          userID: userData.userID
+        },
+        UpdateExpression: 'SET projects = :projects',
+        ExpressionAttributeValues: {
+          ':projects': userProjects
+        },
+        ReturnValues: 'ALL_NEW'
+      };
+      await docClient.update(userParams).promise();
+    }));
+
+    await docClient.delete(projectParams).promise();
+
+    return { message: 'Project deleted successfully' };
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    throw new Error('Failed to delete project');
+  }
+}
+
+async function createDashboard(dashboardDetails) {
+  try {
+    console.log("Creating New Dashboard: ", dashboardDetails.dashboardName);
+    const dashboardID = uuidv4();
+
+    const item = {
+      dashid: dashboardID,
+      dashboardName: dashboardDetails.dashboardName,
+      ownerid: dashboardDetails.userID,
+      accessUserIDs: dashboardDetails.accessUserIDs,
+      projects: dashboardDetails.projects,
+    };
+
+    console.log(item);
+
+    await createItem("dashboards", item);
+
+    console.log("New Dashboard Created: ", item);
+
+    return item; // Return the created dashboard
+  } catch (error) {
+    console.error("Error creating dashboard:", error);
+    throw error;
+  }
+}
+
+async function generateProjectID() {
+  console.log("Generating Project ID");
+  const projectID = "CAT-" + Math.floor(Math.random() * 99999);
+  console.log("Attempting: " + projectID);
+  const params = {
+    TableName: "projects",
+    ProjectionExpression: "projectID",
+  };
+
+  try {
+    // Use the scan operation to retrieve all items from the table
+    const data = await docClient.scan(params).promise();
+
+    // Extract the project IDs from the returned items
+    const projectIDs = data.Items.map((item) => item.projectID);
+    console.log("Existing ProjectIDs:");
+    console.log(projectIDs);
+    if (projectIDs.includes(projectID)) {
+      return generateProjectID();
+    } else {
+      return projectID;
+    }
+  } catch (err) {
+    console.error("Error scanning DynamoDB table:", err);
+    throw err; // Re-throw for error handling in the route or calling function
+  }
+}
+
+async function getUserProjects(userName) {
+  console.log("Compiling user projects for user: ", userName);
+  const user = await getUser(userName);
+  if (user) {
+    const projectIDs = user.projects;
+    const projects = [];
+
+    for (const projectID of projectIDs) {
+      const project = await getProject(projectID);
+      if (project) {
+        projects.push(project);
+      }
+    }
+    console.log("All Projects");
+    console.log(projects);
+    return projects; // Return the compiled list of projects
+  } else {
+    console.log("User not found");
+    return null; // Return null if the user is not found
+  }
+}
 
 /**
  * Finds and returns all taken UserIDs in users table
  * @returns {userIDs} - the list of User Ids
  */
-function findAllUserIds(){
-
+async function findAllUserIds() {
   const params = {
-    TableName: 'users',
-    ProjectExpression: 'userID'
-  }
+    TableName: "users",
+    ProjectionExpression: "userID",
+  };
 
-  docClient.scan(params, (err, data) => {
-    if(err){
-      console.error('Error scanning DynamoDB table', err);
-    } else {
-      const userIDs = data.Items.map(item => item.userID);
-      console.log(userIDs);
-    }
-    return userIDs
-  });
+  try {
+    const data = await docClient.scan(params).promise(); // Use .promise() for chaining
+    const userIDs = data.Items.map((item) => item.userID);
+    return userIDs;
+  } catch (err) {
+    console.error("Error scanning DynamoDB table", err);
+    throw err; // Re-throw for error handling in the route
+  }
+}
+
+/**
+ * Finds and returns all taken UserNames in users table
+ * @returns {userIDs} - the list of User Ids
+ */
+async function findAllUsernames() {
+  const params = {
+    TableName: "users",
+    ProjectionExpression: "userName",
+  };
+
+  try {
+    const data = await docClient.scan(params).promise(); // Use .promise() for chaining
+    const usernames = data.Items.map((item) => item.userName);
+    return usernames;
+  } catch (err) {
+    console.error("Error scanning DynamoDB table", err);
+    throw err; // Re-throw for error handling in the route
+  }
 }
 
 /**
@@ -159,12 +352,12 @@ function findAllUserIds(){
  */
 async function getUser(userName) {
   const params = {
-    TableName: 'users',
-    IndexName: 'usernameIndex',
-    KeyConditionExpression: 'userName = :username',
+    TableName: "users",
+    IndexName: "usernameIndex",
+    KeyConditionExpression: "userName = :username",
     ExpressionAttributeValues: {
-      ':username': userName
-    }
+      ":username": userName,
+    },
   };
 
   try {
@@ -173,98 +366,385 @@ async function getUser(userName) {
       console.log(data.Items[0]);
       return data.Items[0]; // return the first user object if found
     } else {
-      console.log('User not found');
+      console.log("User not found");
       return null; // return null if no user is found
     }
   } catch (err) {
-    console.error('Error scanning DynamoDB table', err);
+    console.error("Error scanning DynamoDB table", err);
   }
 }
+
+async function getProject(projectID) {
+  try {
+    const params = {
+      TableName: "projects", // Replace with your actual table name
+      KeyConditionExpression: "projectID = :projectID",
+      ExpressionAttributeValues: {
+        ":projectID": projectID,
+      },
+    };
+
+    const data = await docClient.query(params).promise();
+    if (data.Items.length > 0) {
+      console.log(data.Items[0]);
+      return data.Items[0]; // Return the project object if found
+    } else {
+      console.log("Project not found");
+      return null; // Return null if no project is found
+    }
+  } catch (err) {
+    console.error("Error querying DynamoDB table", err);
+  }
+}
+
+async function createMilestone(projectID, milestone) {}
+
+async function addSubcategory(projectID, subcategory) {}
+
+async function generateMilestoneReport() {}
+
+async function createRisk() {}
+
+async function editMilestone() {}
+
+async function deleteDashboard(dashboardID) {}
+
+async function editDashboard() {}
+
+async function editRisk() {}
+
+async function createIssue() {}
+
+async function getDashboard(dashboardID) {
+  try {
+    const params = {
+      TableName: "dashboards", // Replace with your actual table name
+      KeyConditionExpression: "dashid = :dashboardID",
+      ExpressionAttributeValues: {
+        ":dashboardID": dashboardID,
+      },
+    };
+
+    const data = await docClient.query(params).promise();
+
+    if (data.Items.length > 0) {
+      const dashboard = data.Items[0];
+      const projects = dashboard.projects;
+
+      // Fetch corresponding project objects for the projects in the dashboard
+      const projectFetchPromises = projects.map(async (project) => {
+        const projectData = await getProject(project.projectID);
+        return {
+          projectID: project.projectID,
+          quantitativeKPIs: projectData.quantitativeKPIs,
+          qualitativeKPIs: projectData.qualitativeKPIs,
+        }; // Only return the necessary fields from the project object
+      });
+
+      const updatedProjects = await Promise.all(projectFetchPromises);
+
+      // Return the updated dashboard object with fetched project data
+      return {
+        dashboardID: dashboard.dashboardID,
+        dashboardName: dashboard.dashboardName,
+        userID: dashboard.userID,
+        accessUserIDs: dashboard.accessUserIDs,
+        projects: updatedProjects,
+      };
+    } else {
+      console.log("Dashboard not found");
+      return null; // Return null if no dashboard is found
+    }
+  } catch (err) {
+    console.error("Error querying DynamoDB table:", err);
+    throw err; // Rethrow the error to be handled by the caller
+  }
+}
+
+function addDashboardToProject(_dashboardID, _projectID) {
+  const params = {
+    TableName: "projects",
+    Key: {
+      projectID: { S: _projectID },
+    },
+  };
+  dynamoDB.get(params, (err, data) => {
+    if (err) {
+      console.error("Error reading item from DynamoDB:", err);
+      return err;
+    } else {
+      console.log(data);
+    }
+  });
+}
+
+async function addProjectToUser(userId, projectId) {
+  try {
+    const params = {
+      TableName: "users", // Replace with your actual table name
+      Key: {
+        userID: userId,
+      },
+      UpdateExpression: `SET projects = list_append(if_not_exists(projects, :emptyList), :projectID)`,
+      ExpressionAttributeValues: {
+        ":emptyList": [],
+        ":projectID": [projectId], // Assuming projectId is a string
+      },
+      ReturnValues: "ALL_NEW", // Return updated item
+    };
+
+    const data = await docClient.update(params).promise();
+    console.log("Updated user data:", data.Attributes); // Log updated user data
+    return { message: "Project added successfully", user: data.Attributes }; // Return success message and updated user data
+  } catch (error) {
+    console.error("Error updating user projects:", error);
+    return { message: "Error adding project" }; // Handle error gracefully
+  }
+}
+
+async function addDashboardToUser(dashid, userId) {
+  console.log("Adding Dashboard to User");
+  try {
+    const params = {
+      TableName: "users", // Replace with your actual table name
+      Key: {
+        userID: userId,
+      },
+      UpdateExpression: `SET dashboards = list_append(if_not_exists(dashboards, :emptyList), :dashid)`,
+      ExpressionAttributeValues: {
+        ":emptyList": [],
+        ":dashid": [dashid], // Assuming projectId is a string
+      },
+      ReturnValues: "ALL_NEW", // Return updated item
+    };
+
+    const data = await docClient.update(params).promise();
+    console.log("Updated user dashboards:", data.Attributes); // Log updated user data
+    return { message: "Dashboard added successfully", user: data.Attributes }; // Return success message and updated user data
+  } catch (error) {
+    console.error("Error updating user projects:", error);
+    return { message: "Error adding project" }; // Handle error gracefully
+  }
+}
+
+async function addUserToProject(userId, projectId, role) {
+  try {
+    const params = {
+      TableName: "projects",
+      Key: {
+        projectID: projectId, // Corrected from 'userID' to 'projectID'
+      },
+      UpdateExpression:
+        "SET #users = list_append(if_not_exists(#users, :emptyList), :user)",
+      ExpressionAttributeNames: {
+        "#users": "users",
+      },
+      ExpressionAttributeValues: {
+        ":emptyList": [],
+        ":user": [{ userId, role }],
+      },
+      ReturnValues: "ALL_NEW",
+    };
+
+    const data = await docClient.update(params).promise();
+    console.log("Updated project data:", data.Attributes);
+    return { message: "User added successfully", user: data.Attributes };
+  } catch (error) {
+    console.error("Error updating project users:", error);
+    throw error;
+  }
+}
+
 /**
  * Finds and returns all taken ProjectIDs in the projects table
  * @returns {Array[String]} - the list of Project Ids
  */
-function findAllProjectIDs(){
-
+function findAllProjectIDs() {
+  console.log("finding all project IDs");
   const params = {
-    TableName: 'projects',
-    ProjectExpression : 'projectID'
-  }
+    TableName: "projects",
+    ProjectExpression: "projectID",
+  };
 
   docClient.scan(params, (err, data) => {
-    if(err){
-      console.error('Error scanning DynamoDB table', err);
+    if (err) {
+      console.error("Error scanning DynamoDB table", err);
     } else {
-      const projectIDs = data.Items.map(item => item.projectIDs);
+      console.log("data");
+      console.log(data.Items);
+      const projectIDs = data.Items.map((item) => item.projectIDs);
+      return projectIDs;
     }
-    return projectIDs
   });
 }
 
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
-function getRandomInt(min, max){
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-  
-  function findMyProjects(myUserID){
-    const params = {
-      TableName: "users",
-      Key: {
-        userID: {S: myUserID}
-      }
-    };
-  
-    dynamoDB.get(params, (err, data) => {
-      if(err) {
-        console.error('Error reading item from DynamoDB:', err);
-        return err;
-      } else {
-        return(data.Item.projects);
+function findMyProjects(myUserID) {
+  const params = {
+    TableName: "users",
+    Key: {
+      userID: { S: myUserID },
+    },
+  };
+
+  dynamoDB.get(params, (err, data) => {
+    if (err) {
+      console.error("Error reading item from DynamoDB:", err);
+      return err;
+    } else {
+      return data.Item.projects;
+    }
+  });
+}
+
+async function updateDashboard(updatedDashboardData) {
+  try {
+    const { projects } = updatedDashboardData;
+
+    // Iterate through each project in the dashboard
+    const projectUpdatePromises = projects.map(async (project) => {
+      try {
+        // Fetch the project from the database
+        const existingProject = await getProject(project.projectID);
+
+        // Update the project with the new KPI values
+        // Assuming you have a function to update a project in the database
+        await updateProject({
+          ...existingProject,
+          quantitativeKPIs: project.quantitativeKPIs,
+          qualitativeKPIs: project.qualitativeKPIs,
+        });
+
+        return true; // Return true if project update succeeds
+      } catch (error) {
+        console.error(`Error updating project ${project.projectID}:`, error);
+        return false; // Return false if project update fails
       }
     });
-  };
-  
-  // function updateItem(){
-  //   const params = {
-  //     Key: {
-  //       key: 'value'
-  //     },  
-  //     UpdateExpression: 'set attribute1 = :value1, attribute2 = :=value2',
-  //     ExpressionAttributeValues:{
-  //       ':value1': 'new-value1',
-  //       ':value2': 'new-value2'
-  //     }
-  //   }
-  
-  //   docClient.update(params, (err,data) => {
-  //     if(err){
-  //       console.error('Error updating item in DynamoDB', err);
-  //     } else {
-  //       console.log('Item updated successfully', data);
-  //     }
-  //   });
-  // }
-  
-  
-  // function deleteItem(table, key){
-  //   const params = {
-  //     TableName: table,
-  //     Key: {
-  //       key: key
-  //     }
-  //   }
-  
-  //   docClient.delete(params, (err, data) => {
-  //     if(err){
-  //       console.error
-  //     }
-  //   })
-  // }
-  module.exports = {
-    createUser,
-    createProject,
-    findAllUserIds,
-    findAllProjectIDs,
-    getRandomInt,
-    getUser,
-  };
+
+    // Wait for all project updates to complete
+    const results = await Promise.all(projectUpdatePromises);
+
+    // Check if all project updates were successful
+    const allUpdatesSuccessful = results.every((result) => result === true);
+
+    if (allUpdatesSuccessful) {
+      // All project updates were successful
+      console.log("All project updates completed successfully.");
+      // Optionally, you can return or perform additional actions here
+    } else {
+      // Some project updates failed
+      console.error("Some project updates failed.");
+      // Optionally, you can handle the failed updates here
+    }
+  } catch (error) {
+    console.error("Error updating dashboard:", error);
+    throw error;
+  }
+}
+
+async function updateProject(projectData) {
+  console.log(projectData);
+  try {
+    const params = {
+      TableName: "projects", // Replace with your actual table name
+      Key: {
+        projectID: projectData.projectId, // Assuming projectID is the primary key
+      },
+      UpdateExpression:
+        "SET #name = :name, #description = :description, #owner = :owner, #notes = :notes, #subcategories = :subcategories, #kpi = :kpi, #users = :users",
+      ExpressionAttributeNames: {
+        "#name": "projectName",
+        "#description": "projectDescription",
+        "#owner": "projectOwner",
+        "#notes": "projectNotes",
+        "#subcategories": "subcategories",
+        "#kpi": "KPIs",
+        "#users": "users",
+      },
+      ExpressionAttributeValues: {
+        ":name": projectData.projectName,
+        ":description": projectData.projectDescription,
+        ":owner": projectData.projectOwner,
+        ":notes": projectData.projectNotes,
+        ":subcategories": projectData.subcategories,
+        ":kpi": projectData.KPIs,
+        ":users": projectData.users,
+      },
+      ReturnValues: "ALL_NEW", // Return all attributes of the updated item
+    };
+
+    // Update the project in the DynamoDB table
+    const data = await docClient.update(params).promise();
+    return data.Attributes; // Return the updated project data
+  } catch (err) {
+    throw err; // Throw the error to be caught by the calling function
+  }
+}
+
+// function updateItem(){
+//   const params = {
+//     Key: {
+//       key: 'value'
+//     },
+//     UpdateExpression: 'set attribute1 = :value1, attribute2 = :=value2',
+//     ExpressionAttributeValues:{
+//       ':value1': 'new-value1',
+//       ':value2': 'new-value2'
+//     }
+//   }
+
+//   docClient.update(params, (err,data) => {
+//     if(err){
+//       console.error('Error updating item in DynamoDB', err);
+//     } else {
+//       console.log('Item updated successfully', data);
+//     }
+//   });
+// }
+
+// function deleteItem(table, key){
+//   const params = {
+//     TableName: table,
+//     Key: {
+//       key: key
+//     }
+//   }
+
+//   docClient.delete(params, (err, data) => {
+//     if(err){
+//       console.error
+//     }
+//   })
+// }
+
+function uuidv4() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0,
+      v = c == "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+module.exports = {
+  createUser,
+  createProject,
+  findAllUserIds,
+  findAllUsernames,
+  findAllProjectIDs,
+  getRandomInt,
+  getUser,
+  addProjectToUser,
+  addDashboardToUser,
+  getProject,
+  addUserToProject,
+  createDashboard,
+  getDashboard,
+  updateDashboard,
+  updateProject,
+  getUserProjects,
+  deleteProject
+};

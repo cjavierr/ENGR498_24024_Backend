@@ -1,18 +1,20 @@
 // app.js
 const db = require("./dynamo.js");
-const cors = require('cors');
+const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const bodyParser = require('body-parser');
+const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-const express = require('express');
+const express = require("express");
 const app = express();
 const port = 3001;
 
 // enabling CORS for all routes
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 
 // parse application/x-www-form-urlencoded
@@ -21,8 +23,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // parse application/json
 app.use(bodyParser.json());
 
-app.get('/', (req, res) => {
-  res.send('Hello, World!');
+app.get("/", (req, res) => {
+  res.send("Hello, World!");
 });
 
 /**
@@ -35,25 +37,69 @@ app.listen(port, () => {
 /**
  * Api call to create a new user
  */
-app.post('/api/newuser', (req, res) => {
-  db.createUser(req.body.userName, req.body.password, req.body.firstName, req.body.lastName, req.body.email);
+app.post("/api/newuser", (req, res) => {
+  db.createUser(
+    req.body.userName,
+    req.body.password,
+    req.body.firstName,
+    req.body.lastName,
+    req.body.email
+  );
   res.status(201).json({
-    message: 'User Created successfully'
+    message: "User Created successfully",
   });
 });
 
 /**
- * 
+ *
  */
-app.post('/api/createNewProject', (req, res) => {
+app.post("/api/createNewProject", async (req, res) => {
+  console.log("Creating New Project");
+  console.log(req.body);
 
+  try {
+    // Call your database function to create the project
+    const project = await db.createProject(req.body);
+    db.addProjectToUser(req.body.userID, project.projectID);
+    res.status(201).json({
+      message: "Project Created successfully",
+    });
+  } catch (error) {
+    console.error("Error creating project:", error);
+    res.status(500).json({
+      message: "Failed to create project. Please try again.",
+    });
+  }
+});
+
+app.post("/api/createDefaultProject", (req, res) => {
+  db.createDefaultProject(req.body.userName);
 });
 
 /**
- * 
+ *
  */
-app.post('/api/addUserToProject', (req, res) => {
+app.post("/api/addUserToProject", (req, res) => {
+  console.log(
+    "Adding user " + req.body.username + " to project " + req.body.projectID
+  );
+  db.addUserToProject(req.body.username, req.body.projectID);
+});
 
+app.get("/api/userProjects", async (req, res) => {
+  console.log("retrieving user projects for: " + req.query.userName);
+  try {
+    const projects = await db.getUserProjects(req.query.userName);
+    res.status(200).json({
+      message: "Projects Retrieved Successfully",
+      projects: projects, // Sending the retrieved projects in the response
+    });
+  } catch (error) {
+    console.error("Error retrieving projects: ", error);
+    res.status(500).json({
+      message: "Failed to retrieve projects. Please try again.",
+    });
+  }
 });
 
 /*
@@ -61,18 +107,84 @@ app.post('/api/addUserToProject', (req, res) => {
  */
 
 /**
- * 
+ *
  */
-app.get('/api/readUserProjects', (req, res) => {
+app.get("/api/readUserProjects", (req, res) => {});
 
+app.get("/api/allUserIDs", (req, res) => {
+  console.log("Looking for all UserIds");
+  db.findAllUserIds()
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user IDs");
+    });
+});
+
+app.get("/api/allProjectIDs", (req, res) => {
+  console.log("Looking for all project Ids");
+  db.findAllProjectIDs()
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving project IDs");
+    });
+});
+
+app.get("/api/allUsernames", (req, res) => {
+  console.log("Looking for all usernames");
+  db.findAllUsernames()
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving usernames ");
+    });
+});
+
+app.post("/api/getUser", (req, res) => {
+  console.log("Looking for user");
+  console.log(req.body);
+  db.getUser(req.body.username)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user");
+    });
+});
+
+app.post("/api/getProject", (req, res) => {
+  console.log("Looking for project");
+  console.log(req.body);
+  db.getProject(req.body.projectId)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving project");
+    });
 });
 
 app.post("/api/login", async (req, res) => {
-  const userName = req.body.userName;
+  console.log("Logging in " + req.body.username);
+  const username = req.body.username;
   const password = req.body.password;
-  console.log(userName, password, req.body);
+  console.log(username, password, req.body);
 
-  const user = await db.getUser(userName);
+  const user = await db.getUser(username);
 
   if (!user || user.password !== password) {
     return res.status(403).json({
@@ -84,7 +196,182 @@ app.post("/api/login", async (req, res) => {
 
   const token = jwt.sign(user, "ibby", { expiresIn: "1h" });
 
-  res.cookie("token", token, {maxAge: 60 * 60 * 1000});
+  res.cookie("token", token, { maxAge: 60 * 60 * 1000 });
 
-  res.status(200).json();
+  res.status(200).json({ success: true });
+});
+
+// Update user's projects list
+app.put("/api/users/addproject", async (req, res) => {
+  console.log("Adding project to user");
+  console.log(req.body);
+  const userid = req.body.userid;
+  const projectid = req.body.projectid;
+
+  console.log(userid);
+  console.log(projectid);
+
+  db.addProjectToUser(userid, projectid)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user");
+    });
+});
+
+// Update project's users list
+app.put("/api/projects/adduser", async (req, res) => {
+  console.log("Adding user to project");
+  console.log(req.body);
+  const projectId = req.body.projectId;
+  const userId = req.body.userId;
+  const role = req.body.role;
+
+  console.log(projectId);
+  console.log(userId);
+  console.log(role);
+
+  db.addUserToProject(projectId, userId, role)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error adding user to project");
+    });
+});
+
+app.post("/api/createDashboard", async (req, res) => {
+  console.log("Creating Dashboard");
+  console.log(req.body);
+  try {
+    const dashboardDetails = req.body;
+
+    // Call the createDashboard function with provided dashboard details
+    const createdDashboard = await db.createDashboard(dashboardDetails);
+    db.addDashboardToUser(createdDashboard.dashid, req.body.userID);
+
+    // Respond with the created dashboard object
+    res.status(201).json({
+      message: "Dashboard created successfully",
+      dashboard: createdDashboard,
+    });
+  } catch (error) {
+    // Respond with error message
+    console.error("Error creating dashboard:", error);
+    res.status(500).json({ message: "Failed to create dashboard" });
+  }
+});
+
+// Route to get a dashboard by ID
+app.post("/api/getDashboard", async (req, res) => {
+  try {
+    console.log("Looking for dashboard");
+    console.log(req.body);
+
+    // Assuming dashboardID is sent in the request body
+    const dashboardID = req.body.dashboardID;
+
+    // Fetch the dashboard object from the database
+    const dashboard = await db.getDashboard(dashboardID);
+
+    if (dashboard) {
+      console.log("Dashboard found:", dashboard);
+      res.json(dashboard);
+    } else {
+      console.log("Dashboard not found");
+      res.status(404).json({ message: "Dashboard not found" });
+    }
+  } catch (error) {
+    console.error("Error retrieving dashboard:", error);
+    res.status(500).json({ message: "Error retrieving dashboard" });
+  }
+});
+
+app.post("/api/saveDashboard", async (req, res) => {
+  try {
+    const updatedDashboardData = req.body.dashboardData;
+
+    // Update the dashboard entry in the DynamoDB table
+    await db.updateDashboard(updatedDashboardData);
+
+    res.status(200).json({ message: "Dashboard updated successfully" });
+  } catch (error) {
+    console.error("Error updating dashboard:", error);
+    res.status(500).json({ message: "Failed to update dashboard" });
+  }
+});
+
+app.post("/api/saveProject", async (req, res) => {
+  console.log("Updating Project Information");
+  try {
+    const updatedProjectData = req.body.projectData;
+
+    // Update the project entry in the DynamoDB table
+    await db.updateProject({
+      ...updatedProjectData,
+      projectId: req.body.projectId,
+    });
+
+    res.status(200).json({ message: "Project updated successfully" });
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ message: "Failed to update project" });
+  }
+});
+
+app.post("/api/deleteProject", async (req, res) => {
+  console.log(req.body);
+  console.log("Deleting project: ", req.body.projectId);
+  try {
+    const updatedProjectData = req.body.projectData;
+
+    // Update the project entry in the DynamoDB table
+    await db.deleteProject(req.body.projectId);
+
+    res.status(200).json({ message: "Project deleted successfully" });
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ message: "Failed to delete project" });
+  }
+});
+
+app.post("/api/mergeDashboards", async (req, res) => {
+  console.log("Merging Dashboards");
+
+  const { dashboard1Id, dashboard2Id, ownerId } = req.body;
+
+  try {
+    // Fetch details of both dashboards
+    const dashboard1 = await db.getDashboard(dashboard1Id);
+    const dashboard2 = await db.getDashboard(dashboard2Id);
+
+    // Merge projects
+    const mergedProjects = [...dashboard1.projects, ...dashboard2.projects];
+
+    // Merge accessUserIDs (if needed)
+    const mergedAccessUserIDs = [
+      ...new Set([...dashboard1.accessUserIDs, ...dashboard2.accessUserIDs]),
+    ];
+
+    // Construct the merged dashboard object
+    const mergedDashboard = {
+      dashboardName: `Merged Dashboard (${dashboard1.dashboardName} + ${dashboard2.dashboardName})`,
+      userID: ownerId,
+      accessUserIDs: [ownerId],
+      projects: mergedProjects,
+    };
+
+    // Save the merged dashboard to the database
+    await db.createDashboard(mergedDashboard);
+
+    res.send({ message: "Dashboards merged successfully!" });
+  } catch (error) {
+    console.error("Error merging dashboards:", error);
+    res.status(500).send("Failed to merge dashboards. Please try again.");
+  }
 });

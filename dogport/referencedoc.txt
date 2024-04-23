@@ -1,0 +1,50 @@
+API Calls
+
+/api/newuser
+Creates new user on the system
+requires req.body.userName, req.body.password, req.body.firstName, req.body.lastName, req.body.email
+
+/api/createNewProject
+Creates new project on the system
+
+/api/addUserToProject
+Adds user to specified project
+
+/api/readUserProjects
+Returns the all projects a user is associated with
+
+/api/login
+Attempts to log user in to the system using their user ID and password
+
+/api/addSubcategory
+adds sub category to specified project
+
+/api/createMilestone
+adds milestone to specified project
+
+/api/generateMilestoneReport
+generates milestone report for specified project
+
+/api/createRisk
+creates new risk for specified project
+
+/api/editMilestone
+edits milestone for specified project
+
+/api/createProject
+edit creates new project
+
+/api/deleteDashboard
+deletes dashboard
+
+/api/editDashboard
+edits dashboard
+
+/api/createDashboard
+creates new dashboard
+
+/api/editRisk
+edits risk
+
+/api/createIssue
+creates new Issue
