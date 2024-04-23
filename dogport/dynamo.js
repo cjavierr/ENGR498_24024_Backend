@@ -103,11 +103,10 @@ function createUser(userName, password, firstName, lastName, email){
     password : password,
     firstName : firstName,
     lastName : lastName,
-    email : email,
     projects : []
   }
 
-  createItem("users", item)
+  createItem("usersv2", item)
 }
 
 /**
@@ -116,23 +115,21 @@ function createUser(userName, password, firstName, lastName, email){
  * @param {Array[String]} listKPIs 
  */
 
-function createProject(projectName, ownerID, listKPIs, projectDescription){
-  projectIDs = findAllProjectIDs();
-  projectID = getRandomInt(1,999);
-  projectID = "CAT-" + projectID.toString();  
-  // while (projectIDs.includes(projectID) == true){
-  //   projectID = getRandomInt(1,99999)
-  // }
-  const projectUsers = [{userID: ownerID, role: "owner"}]
+function createProject(projectID, owner, lowerLevel, higherLevel, projectName, dashboard, risks, issues, users){
+  
   const item = {
     projectID : projectID,
+    owner : owner,
+    lowerLevel : lowerLevel,
+    higherLevel : higherLevel,
     projectName : projectName,
-    projectUsers : projectUsers,
-    kpis : listKPIs,
-    projectDescription : projectDescription
+    dashboard : dashboard,
+    risks : risks,
+    issues : issues,
+    users : users
   }
   console.log(item)
-  createItem("projects", item)
+  createItem("projv2", item)
 }
 
 
@@ -143,7 +140,7 @@ function createProject(projectName, ownerID, listKPIs, projectDescription){
 function findAllUserIds(){
 
   const params = {
-    TableName: 'users',
+    TableName: 'usersv2',
     ProjectExpression: 'userID'
   }
 
@@ -164,8 +161,8 @@ function findAllUserIds(){
  */
 async function getUser(userName) {
   const params = {
-    TableName: 'users',
-    IndexName: 'usernameIndex',
+    TableName: 'usersv2',
+    IndexName: 'userName-index',
     KeyConditionExpression: 'userName = :username',
     ExpressionAttributeValues: {
       ':username': userName
@@ -192,7 +189,7 @@ async function getUser(userName) {
 function findAllProjectIDs(){
 
   const params = {
-    TableName: 'projects',
+    TableName: 'projv2',
     ProjectExpression : 'projectID'
   }
 
@@ -211,23 +208,23 @@ function getRandomInt(min, max){
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
   
-  function findMyProjects(myUserID){
-    const params = {
-      TableName: "users",
-      Key: {
-        userID: {S: myUserID}
-      }
-    };
-  
-    dynamoDB.get(params, (err, data) => {
-      if(err) {
-        console.error('Error reading item from DynamoDB:', err);
-        return err;
-      } else {
-        return(data.Item.projects);
-      }
-    });
+function findMyProjects(myUserID){
+  const params = {
+    TableName: "usersv2",
+    Key: {
+      userID: {S: myUserID}
+    }
   };
+
+  dynamoDB.get(params, (err, data) => {
+    if(err) {
+      console.error('Error reading item from DynamoDB:', err);
+      return err;
+    } else {
+      return(data.Item.projects);
+    }
+  });
+};
 
   async function queryProjectsWithUserId(userId) {
     const params = {
