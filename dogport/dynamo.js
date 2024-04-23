@@ -394,6 +394,30 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
   ]})
     
     }
+  
+    async function editRisk(projectID, updatedRisk) {
+      try {
+        // Fetch the current project data
+        const qualitativeKPIS = await getQualitativeKPIs(projectID);
+    
+        // Find the risk to update
+        const riskKPI = qualitativeKPIs.find(kpi => kpi.name === 'Risks');
+        const riskToUpdate = riskKPI.table.find(risk => risk.recordNumber === updatedRisk.recordNumber);
+    
+        // If the risk doesn't exist, throw an error
+        if (!riskToUpdate) {
+          throw new Error(`Risk with record number ${updatedRisk.recordNumber} not found`);
+        }
+    
+        // Update the risk
+        Object.assign(riskToUpdate, updatedRisk);
+    
+        // Save the updated project data
+        await updateProject(projectID, project);
+      } catch (err) {
+        console.error(`Error updating risk for project ${projectID}`, err);
+      }
+    }
 
   // function updateItem(){
   //   const params = {
