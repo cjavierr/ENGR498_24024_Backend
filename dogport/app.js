@@ -102,6 +102,23 @@ app.get("/api/userProjects", async (req, res) => {
   }
 });
 
+
+app.get("/api/userDashboards", async (req, res) => {
+  console.log("retrieving user dashboards for: " + req.query.username);
+  try {
+    const dashboards = await db.getUserDashboards(req.query.username);
+    res.status(200).json({
+      message: "Projects Retrieved Successfully",
+      dashboards: dashboards, // Sending the retrieved projects in the response
+    });
+  } catch (error) {
+    console.error("Error retrieving projects: ", error);
+    res.status(500).json({
+      message: "Failed to retrieve projects. Please try again.",
+    });
+  }
+});
+
 /*
  * Get functions read data from table and pass it to user
  */
@@ -245,7 +262,7 @@ app.put("/api/projects/adduser", async (req, res) => {
     });
 });
 
-app.post("/api/createDashboard", async (req, res) => {
+app.post("/api/createNewDashboard", async (req, res) => {
   console.log("Creating Dashboard");
   console.log(req.body);
   try {
@@ -253,8 +270,7 @@ app.post("/api/createDashboard", async (req, res) => {
 
     // Call the createDashboard function with provided dashboard details
     const createdDashboard = await db.createDashboard(dashboardDetails);
-    db.addDashboardToUser(createdDashboard.dashid, req.body.userID);
-
+    console.log("DONE CREATING DASHBOARD");
     // Respond with the created dashboard object
     res.status(201).json({
       message: "Dashboard created successfully",
@@ -293,11 +309,12 @@ app.post("/api/getDashboard", async (req, res) => {
 });
 
 app.post("/api/saveDashboard", async (req, res) => {
+  console.log("Saving Dashboard");
+  console.log(req.body);
   try {
-    const updatedDashboardData = req.body.dashboardData;
 
     // Update the dashboard entry in the DynamoDB table
-    await db.updateDashboard(updatedDashboardData);
+    await db.updateDashboard(req.body);
 
     res.status(200).json({ message: "Dashboard updated successfully" });
   } catch (error) {
@@ -306,15 +323,29 @@ app.post("/api/saveDashboard", async (req, res) => {
   }
 });
 
+app.post("/api/deleteDashboard", async (req,res) => {
+  console.log(req.body);
+  console.log("Deleting Dashboard: ", req.body.dashid);
+  try {
+    // Update the project entry in the DynamoDB table
+    await db.deleteDashboard(req.body.dashid);
+
+    res.status(200).json({ message: "Dashboard deleted successfully" });
+  } catch (error) {
+    console.error("Error updating Dashboard:", error);
+    res.status(500).json({ message: "Failed to delete Dashboard" });
+  }
+})
+
 app.post("/api/saveProject", async (req, res) => {
   console.log("Updating Project Information");
+  console.log(req.body);
   try {
-    const updatedProjectData = req.body.projectData;
+    const updatedProjectData = req.body;
 
     // Update the project entry in the DynamoDB table
     await db.updateProject({
-      ...updatedProjectData,
-      projectId: req.body.projectId,
+      updatedProjectData
     });
 
     res.status(200).json({ message: "Project updated successfully" });

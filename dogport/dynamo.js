@@ -100,6 +100,7 @@ async function createItem(table, value) {
     TableName: table,
     Item: value,
   };
+  console.log("Creating", params);
 
   try {
     const data = await docClient
@@ -154,6 +155,7 @@ async function createProject(projectDetails) {
       ...projectDetails,
       projectID: projectID,
       dashboards: [],
+      risks: [],
     };
     console.log("Creating New Project: ", item);
 
@@ -166,7 +168,6 @@ async function createProject(projectDetails) {
     await addProjectToUser(user.userID, projectID);
     await addProjectToUser(admin.userID, projectID);
 
-
     console.log("New Project Created: ", item);
 
     return item; // Return the created project
@@ -177,75 +178,97 @@ async function createProject(projectDetails) {
 }
 
 async function deleteProject(projectId) {
-  console.log("Attempting to delete project: ", projectId)
+  console.log("Attempting to delete project: ", projectId);
   const projectIdToRemove = projectId;
   try {
     // Step 1: Get the project details
     const projectParams = {
-      TableName: 'projects',
+      TableName: "projects",
       Key: {
-        projectID: projectId
-      }
+        projectID: projectId,
+      },
     };
     console.log("Getting project: ", projectParams);
     const project = await docClient.get(projectParams).promise();
     if (!project.Item) {
-      throw new Error('Project not found');
+      throw new Error("Project not found");
     }
     console.log("Found Project");
 
     // Step 3: Update each user's projects list
     const usersToUpdate = project.Item.users;
     console.log("Users: ", usersToUpdate);
-    await Promise.all(usersToUpdate.map(async (user) => {
-      const userId = user.username;
-      const userData = await getUser(userId);
-      if (!userData) {
-        console.error(`User with username ${userId} not found`);
-        return;
-      }
-      console.log(userData);
-      const userProjects = userData.projects.filter(projectId => projectId !== projectIdToRemove);
-      console.log("New User Params: ", userProjects);
-      const userParams = {
-        TableName: 'users',
-        Key: {
-          userID: userData.userID
-        },
-        UpdateExpression: 'SET projects = :projects',
-        ExpressionAttributeValues: {
-          ':projects': userProjects
-        },
-        ReturnValues: 'ALL_NEW'
-      };
-      await docClient.update(userParams).promise();
-    }));
+    await Promise.all(
+      usersToUpdate.map(async (user) => {
+        const userId = user.username;
+        const userData = await getUser(userId);
+        if (!userData) {
+          console.error(`User with username ${userId} not found`);
+          return;
+        }
+        console.log(userData);
+        const userProjects = userData.projects.filter(
+          (projectId) => projectId !== projectIdToRemove
+        );
+        console.log("New User Params: ", userProjects);
+        const userParams = {
+          TableName: "users",
+          Key: {
+            userID: userData.userID,
+          },
+          UpdateExpression: "SET projects = :projects",
+          ExpressionAttributeValues: {
+            ":projects": userProjects,
+          },
+          ReturnValues: "ALL_NEW",
+        };
+        await docClient.update(userParams).promise();
+      })
+    );
 
     await docClient.delete(projectParams).promise();
 
-    return { message: 'Project deleted successfully' };
+    return { message: "Project deleted successfully" };
   } catch (error) {
-    console.error('Error deleting project:', error);
-    throw new Error('Failed to delete project');
+    console.error("Error deleting project:", error);
+    throw new Error("Failed to delete project");
   }
 }
 
 async function createDashboard(dashboardDetails) {
   try {
     console.log("Creating New Dashboard: ", dashboardDetails.dashboardName);
-    const dashboardID = uuidv4();
-
+    const dashboardID = await generateDashboardID();
     const item = {
       dashid: dashboardID,
       dashboardName: dashboardDetails.dashboardName,
-      ownerid: dashboardDetails.userID,
-      accessUserIDs: dashboardDetails.accessUserIDs,
-      projects: dashboardDetails.projects,
+      ownerid: dashboardDetails.owner,
+      users: dashboardDetails.users,
+      project: dashboardDetails.project,
+      escalate: false,
+      versions: dashboardDetails.versions,
+      dashboards: dashboardDetails.dashboards,
     };
 
     console.log(item);
 
     await createItem("dashboards", item);
+
+    console.log(dashboardDetails);
+    const usersToUpdate = dashboardDetails.users;
+
+    console.log(usersToUpdate);
+
+    for (const currentUser of usersToUpdate) {
+      console.log(currentUser);
+      if (!currentUser) {
+        break;
+      }
+      const currUser = await getUser(currentUser);
+      console.log(currUser);
+      await addDashboardToUser(dashboardID, currUser.userID);
+    }
+    await addDashboardToProject(dashboardID, dashboardDetails.project);
 
     console.log("New Dashboard Created: ", item);
 
@@ -284,6 +307,38 @@ async function generateProjectID() {
   }
 }
 
+async function generateDashboardID() {
+  console.log("Generating Dashboard ID");
+  const dashboardID =
+    "DSH-" +
+    Math.floor(Math.random() * 99999) +
+    "-CAT-" +
+    Math.floor(Math.random() * 99999);
+  console.log("Attempting: " + dashboardID);
+  const params = {
+    TableName: "dashboards",
+    ProjectionExpression: "dashid",
+  };
+
+  try {
+    // Use the scan operation to retrieve all items from the table
+    const data = await docClient.scan(params).promise();
+
+    // Extract the project IDs from the returned items
+    const dashids = data.Items.map((item) => item.dashid);
+    console.log("Existing DashboardIDs:");
+    console.log(dashids);
+    if (dashids.includes(dashboardID)) {
+      return generateProjectID();
+    } else {
+      return dashboardID;
+    }
+  } catch (err) {
+    console.error("Error scanning DynamoDB table:", err);
+    throw err; // Re-throw for error handling in the route or calling function
+  }
+}
+
 async function getUserProjects(userName) {
   console.log("Compiling user projects for user: ", userName);
   const user = await getUser(userName);
@@ -300,6 +355,28 @@ async function getUserProjects(userName) {
     console.log("All Projects");
     console.log(projects);
     return projects; // Return the compiled list of projects
+  } else {
+    console.log("User not found");
+    return null; // Return null if the user is not found
+  }
+}
+
+async function getUserDashboards(username) {
+  console.log("Compiling user dashboards for user: ", username);
+  const user = await getUser(username);
+  if (user) {
+    const dashboardIDs = user.dashboards;
+    const dashboards = [];
+
+    for (const dashboardID of dashboardIDs) {
+      const dashboard = await getDashboard(dashboardID);
+      if (dashboard) {
+        dashboards.push(dashboard);
+      }
+    }
+    console.log("All Dashboards");
+    console.log(dashboards);
+    return dashboards; // Return the compiled list of dashboards
   } else {
     console.log("User not found");
     return null; // Return null if the user is not found
@@ -407,7 +484,96 @@ async function createRisk() {}
 
 async function editMilestone() {}
 
-async function deleteDashboard(dashboardID) {}
+async function deleteDashboard(dashboardID) {
+  console.log("Attempting to delete dashboard:", dashboardID);
+
+  try {
+    // Step 1: Fetch the dashboard details
+
+    const dashboard = await getDashboard(dashboardID);
+    const dashboardParams = {
+      TableName: "dashboards",
+      Key: {
+        dashid: dashboardID,
+        ownerid: dashboard.ownerid,
+      },
+    };
+    console.log("Dashboard found:", dashboard);
+
+    // Step 2: Update each user's dashboard list
+    const usersToUpdate = dashboard.users;
+    console.log("Users to update:", usersToUpdate);
+
+    const project = await getProject(dashboard.project);
+    console.log(project);
+    console.log("Dashboards: ", project.dashboards);
+
+    const projectDashboards = project.dashboards.filter(
+      (id) => id !== dashboardID
+    );
+
+    console.log("New user dashboards:", projectDashboards);
+
+    console.log("New User Params: ", projectDashboards);
+    const projectParams = {
+      TableName: "projects",
+      Key: {
+        projectID: project.projectID,
+      },
+      UpdateExpression: "SET dashboards = :dashboards",
+      ExpressionAttributeValues: {
+        ":dashboards": projectDashboards,
+      },
+      ReturnValues: "ALL_NEW",
+    };
+    await docClient.update(projectParams).promise();
+
+    await Promise.all(
+      usersToUpdate.map(async (user) => {
+        try {
+          // Assuming getUser function is available and correctly implemented
+          console.log();
+          const userData = await getUser(user);
+          if (!userData) {
+            console.error(`User with ID ${user} not found`);
+            return;
+          }
+          console.log("User data:", userData);
+          const userDashboards = userData.dashboards.filter(
+            (id) => id !== dashboardID
+          );
+          console.log("New user dashboards:", userDashboards);
+
+          console.log("New User Params: ", userDashboards);
+          const userParams = {
+            TableName: "users",
+            Key: {
+              userID: userData.userID,
+            },
+            UpdateExpression: "SET dashboards = :dashboards",
+            ExpressionAttributeValues: {
+              ":dashboards": userDashboards,
+            },
+            ReturnValues: "ALL_NEW",
+          };
+          await docClient.update(userParams).promise();
+          console.log("User dashboard list updated successfully");
+        } catch (error) {
+          console.error("Error updating user's dashboard list:", error);
+        }
+      })
+    );
+
+    // Step 4: Delete the dashboard
+    console.log(dashboardParams);
+    await docClient.delete(dashboardParams).promise();
+
+    return { message: "Dashboard deleted successfully" };
+  } catch (error) {
+    console.error("Error deleting dashboard:", error);
+    throw new Error("Failed to delete dashboard");
+  }
+}
 
 async function editDashboard() {}
 
@@ -416,6 +582,8 @@ async function editRisk() {}
 async function createIssue() {}
 
 async function getDashboard(dashboardID) {
+  console.log("Retrieving dashboard: ", dashboardID);
+
   try {
     const params = {
       TableName: "dashboards", // Replace with your actual table name
@@ -425,57 +593,22 @@ async function getDashboard(dashboardID) {
       },
     };
 
-    const data = await docClient.query(params).promise();
-
-    if (data.Items.length > 0) {
-      const dashboard = data.Items[0];
-      const projects = dashboard.projects;
-
-      // Fetch corresponding project objects for the projects in the dashboard
-      const projectFetchPromises = projects.map(async (project) => {
-        const projectData = await getProject(project.projectID);
-        return {
-          projectID: project.projectID,
-          quantitativeKPIs: projectData.quantitativeKPIs,
-          qualitativeKPIs: projectData.qualitativeKPIs,
-        }; // Only return the necessary fields from the project object
-      });
-
-      const updatedProjects = await Promise.all(projectFetchPromises);
-
-      // Return the updated dashboard object with fetched project data
-      return {
-        dashboardID: dashboard.dashboardID,
-        dashboardName: dashboard.dashboardName,
-        userID: dashboard.userID,
-        accessUserIDs: dashboard.accessUserIDs,
-        projects: updatedProjects,
-      };
-    } else {
-      console.log("Dashboard not found");
-      return null; // Return null if no dashboard is found
+    try {
+      const data = await docClient.query(params).promise();
+      if (data.Items.length > 0) {
+        console.log(data.Items[0]);
+        return data.Items[0]; // return the first user object if found
+      } else {
+        console.log("User not found");
+        return null; // return null if no user is found
+      }
+    } catch (err) {
+      console.error("Error scanning DynamoDB table", err);
     }
   } catch (err) {
     console.error("Error querying DynamoDB table:", err);
     throw err; // Rethrow the error to be handled by the caller
   }
-}
-
-function addDashboardToProject(_dashboardID, _projectID) {
-  const params = {
-    TableName: "projects",
-    Key: {
-      projectID: { S: _projectID },
-    },
-  };
-  dynamoDB.get(params, (err, data) => {
-    if (err) {
-      console.error("Error reading item from DynamoDB:", err);
-      return err;
-    } else {
-      console.log(data);
-    }
-  });
 }
 
 async function addProjectToUser(userId, projectId) {
@@ -502,8 +635,34 @@ async function addProjectToUser(userId, projectId) {
   }
 }
 
+async function addDashboardToProject(dashid, projectid) {
+  console.log("Adding Dashboard to project");
+  try {
+    const params = {
+      TableName: "projects", // Replace with your actual table name
+      Key: {
+        projectID: projectid,
+      },
+      UpdateExpression: `SET dashboards = list_append(if_not_exists(dashboards, :emptyList), :dashid)`,
+      ExpressionAttributeValues: {
+        ":emptyList": [],
+        ":dashid": [dashid], // Assuming projectId is a string
+      },
+      ReturnValues: "ALL_NEW", // Return updated item
+    };
+
+    const data = await docClient.update(params).promise();
+    console.log("Updated projects dashboards:", data.Attributes); // Log updated user data
+    return { message: "Dashboard added successfully", user: data.Attributes }; // Return success message and updated user data
+  } catch (error) {
+    console.error("Error updating project dashboards:", error);
+    return { message: "Error adding dashboard" }; // Handle error gracefully
+  }
+}
+
 async function addDashboardToUser(dashid, userId) {
   console.log("Adding Dashboard to User");
+  console.log(dashid + " : " + userId);
   try {
     const params = {
       TableName: "users", // Replace with your actual table name
@@ -600,51 +759,38 @@ function findMyProjects(myUserID) {
   });
 }
 
-async function updateDashboard(updatedDashboardData) {
+
+async function updateDashboard(dashboardDetails) {
   try {
-    const { projects } = updatedDashboardData;
-
-    // Iterate through each project in the dashboard
-    const projectUpdatePromises = projects.map(async (project) => {
-      try {
-        // Fetch the project from the database
-        const existingProject = await getProject(project.projectID);
-
-        // Update the project with the new KPI values
-        // Assuming you have a function to update a project in the database
-        await updateProject({
-          ...existingProject,
-          quantitativeKPIs: project.quantitativeKPIs,
-          qualitativeKPIs: project.qualitativeKPIs,
-        });
-
-        return true; // Return true if project update succeeds
-      } catch (error) {
-        console.error(`Error updating project ${project.projectID}:`, error);
-        return false; // Return false if project update fails
-      }
-    });
-
-    // Wait for all project updates to complete
-    const results = await Promise.all(projectUpdatePromises);
-
-    // Check if all project updates were successful
-    const allUpdatesSuccessful = results.every((result) => result === true);
-
-    if (allUpdatesSuccessful) {
-      // All project updates were successful
-      console.log("All project updates completed successfully.");
-      // Optionally, you can return or perform additional actions here
-    } else {
-      // Some project updates failed
-      console.error("Some project updates failed.");
-      // Optionally, you can handle the failed updates here
-    }
+    const params = {
+      TableName: "dashboards",
+      Key: {
+        dashid: dashboardDetails.dashid,
+        ownerid: dashboardDetails.ownerid,
+      },
+      Item: {
+        dashid: dashboardDetails.dashid,
+        dashboardName: dashboardDetails.dashboardName,
+        ownerid: dashboardDetails.ownerid,
+        users: dashboardDetails.users,
+        project: dashboardDetails.project,
+        escalate: dashboardDetails.dashid,
+        versions: dashboardDetails.versions,
+        dashboards: dashboardDetails.dashboards,
+      },
+    };
+    console.log("Updating dashboard with parameters:", params);
+    
+    const data = await docClient.put(params).promise();
+    console.log("Dashboard updated successfully:", data);
+    
+    return data;
   } catch (error) {
     console.error("Error updating dashboard:", error);
     throw error;
   }
 }
+
 
 async function updateProject(projectData) {
   console.log(projectData);
@@ -746,5 +892,7 @@ module.exports = {
   updateDashboard,
   updateProject,
   getUserProjects,
-  deleteProject
+  deleteProject,
+  getUserDashboards,
+  deleteDashboard,
 };
