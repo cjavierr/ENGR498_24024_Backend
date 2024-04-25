@@ -107,7 +107,7 @@ app.post("/api/login", async (req, res) => {
   const token = jwt.sign(user, "ibby", { expiresIn: "1h" });
 
   res.cookie("token", token, {maxAge: 60 * 60 * 1000});
-  res.cookie("firstName", user.firstName, {maxAge: 60 * 60 * 1000});
+  res.cookie("firstName", user.userName, {maxAge: 60 * 60 * 1000});
   res.status(200).json();
 });
 
@@ -156,14 +156,17 @@ app.post('/api/getQualitativeKPI', async (req, res) => {
 app.get('/api/getRisks', async (req, res) => {
   try {
     const jwtInfo = jwt.verify(req.cookies.token, "ibby");
-    const userFirstName = jwtInfo.firstName;
+    const userFirstName = jwtInfo.userName;
     const projects = jwtInfo.projects;
 
     let risks = [];
     for (const projectID of projects) {
       const projectRisks = await db.getProjectRisks(projectID);
+      if(  projectRisks == undefined || projectRisks.length == 0) { 
+        continue;
+      }
       for (const item of projectRisks) {
-        if ((item.owner.includes(userFirstName)) || (item.viewers.includes(userFirstName))) {
+        if ((item.owner && item.owner == userFirstName) || (item.viewers && item.viewers.includes(userFirstName))) {
           risks.push(item);
         }
       }
@@ -185,7 +188,7 @@ app.post('/api/addRisk', async (req, res) => {
     const projectID = reqData.projectID;
     const jwtInfo = jwt.verify(req.cookies.token, "ibby");
     newEntry = reqData.newEntry;
-    newEntry.owner = jwtInfo.firstName; // Making created of risk  owner
+    newEntry.owner = jwtInfo.userName; // Making created of risk  owner
     newEntry.viewers = []; 
     await db.addRisks(projectID, newEntry);
 
@@ -206,6 +209,24 @@ app.post('/api/escalateRisk', async (req, res) => {
     res.status(200)
   } catch (err) {
     console.error('Error in escalateRisk', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to edit a risk
+ */
+app.post('/api/editRisk', async (req, res) => {
+  try {
+    const reqData = req.body;
+    const newEntry = reqData.newEntry;
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const riskID = newEntry.recordNumber;
+    await db.editRisk(riskID, newEntry);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in editRisk:', err);
     res.status(500).json({ error: 'Internal server error' }); 
   }
 });

@@ -1,4 +1,3 @@
-
 const AWS = require('aws-sdk');
 
 // Set up AWS credentials. 
@@ -417,7 +416,6 @@ async function addRisks(projectID, riskObject) {
 async function escalateRisk(riskID) {
   // Extract projectID from riskID
   const projectID = riskID.split('-').slice(0, 2).join('-');
-  console.log('Project ID:', projectID);
   // Get the project
   try{
   const project = await getProject(projectID);
@@ -428,12 +426,15 @@ async function escalateRisk(riskID) {
   if (!riskToUpdate) {
     throw new Error(`Risk with record number ${riskID} not found in project ${projectID}`);
   }
-
+  
+  const originalOwner = riskToUpdate.owner;
   // Append the current owner to the viewer list
   riskToUpdate.viewers.push(riskToUpdate.owner);
 
   // Change the owner to the orgAdmin
   riskToUpdate.owner = project.orgAdmin;
+
+  riskToUpdate.notes += ` Escalated by ${originalOwner} to ${riskToUpdate.owner}.`;
 
   // Update the risk in the project
   const updatedRisks = project.risks.map(risk => risk.recordNumber === riskID ? riskToUpdate : risk);
@@ -444,7 +445,47 @@ async function escalateRisk(riskID) {
   console.error(`Error escalating risk for project ${projectID}`, err);
 }
 }
-module.exports.escalateRisk = escalateRisk;
+
+/**
+ * Edits a risk within a project with a specific riskID parameter, and a risk object to replace it with
+ * @param {String} projectID 
+ * @param {String} riskID 
+ * @param {Object} riskObject 
+ */
+async function editRisk( riskID, riskObject) {
+  const projectID = riskID.split('-').slice(0, 2).join('-');
+  const project = await getProject(projectID);
+  const risks = project.risks;
+
+  // Find the risk with the given recordNumber and replace it with the new riskObject
+  for (let i = 0; i < risks.length; i++) {
+    if (risks[i].recordNumber === riskID) {
+      risks[i] = riskObject;
+      break;
+    }
+  }
+
+  const params = {
+    TableName: 'projects', // replace with your table name
+    Key: {
+      'projectID': projectID
+    },
+    UpdateExpression: 'set risks = :risks',
+    ExpressionAttributeValues: {
+      ':risks': risks
+    },
+    ReturnValues: 'UPDATED_NEW'
+  };
+
+  try {
+    const data = await docClient.update(params).promise();
+    console.log('Risk updated successfully', data);
+  } catch (err) {
+    console.error('Error updating risk in DynamoDB', err);
+  }
+}
+
+module.exports.editRisk = editRisk;
 
  
   // function updateItem(){
@@ -496,4 +537,5 @@ module.exports.escalateRisk = escalateRisk;
     getUserProjects,
     getUser,
     escalateRisk,
+    editRisk,
   };
