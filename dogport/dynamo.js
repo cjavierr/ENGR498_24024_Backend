@@ -175,7 +175,6 @@ async function getUser(userName) {
   try {
     const data = await docClient.query(params).promise();
     if (data.Items.length > 0) {
-      console.log(data.Items[0]);
       return data.Items[0]; // return the first user object if found
     } else {
       console.log('User not found');
@@ -229,21 +228,48 @@ function getRandomInt(min, max){
     });
   };
 
-  async function queryProjectsWithUserId(userId) {
-    const params = {
-      TableName: 'projects'
-    };
+  async function getUserProjects(userName) {
+    console.log("Compiling user projects for user: ", userName);
+    const user = await getUser(userName);
+    if (user) {
+      const projectIDs = user.projects;
+      const projects = [];
+  
+      for (const projectID of projectIDs) {
+        const project = await getProject(projectID);
+        if (project) {
+          projects.push(project);
+        }
+      }
+      console.log("All Projects");
+      console.log(projects);
+      return projects; // Return the compiled list of projects
+    } else {
+      console.log("User not found");
+      return null; // Return null if the user is not found
+    }
+  }
 
+  async function getProject(projectID) {
     try {
-      const data = await docClient.scan(params).promise();
-      const items = data.Items;
-      const filteredItems = items.filter(item => {
-        return item.users.includes(userId);
-      });
-      console.log('Filtered items:', filteredItems); 
-      return filteredItems;
+      const params = {
+        TableName: "projects", // Replace with your actual table name
+        KeyConditionExpression: "projectID = :projectID",
+        ExpressionAttributeValues: {
+          ":projectID": projectID,
+        },
+      };
+  
+      const data = await docClient.query(params).promise();
+      if (data.Items.length > 0) {
+        console.log(data.Items[0]);
+        return data.Items[0]; // Return the project object if found
+      } else {
+        console.log("Project not found");
+        return null; // Return null if no project is found
+      }
     } catch (err) {
-      console.error('Error querying items from DynamoDB', err);
+      console.error("Error querying DynamoDB table", err);
     }
   }
 
@@ -313,112 +339,114 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
   updateProject(projectID, {dashboards: dashid})
   }
 
-  // Helper function to append items to kpi tables
-  function appendToTable(qualitativeKPIs, tableName, newEntry) {
-    // Finds table with tableName parameter
-    const table = qualitativeKPIs.find(kpi => kpi.name === tableName);
-  
-    // If the table exists, append the new entry to its table array
-    if (table) {
-      table.table.push(newEntry);
+
+async function getProjectRisks(projectID) {
+  const params = {
+    TableName: 'projects',
+    Key: {
+      'projectID': projectID
+    }
+  };
+
+  try {
+    const data = await docClient.get(params).promise();
+    const project = data.Item;
+
+    if (project) {
+      // Assuming the risks are stored in a "risks" field in the project object
+      return project.risks;
     } else {
-      // If the table doesn't exist, log an error message
-      console.error(`Table ${tableName} not found`);
+      console.error(`Project with ID ${projectID} not found`);
+      return null;
     }
+  } catch (error) {
+    console.error(`Error getting project with ID ${projectID}`, error);
+    return null;
   }
 
-  /**
-   * Queries the projects table and returns the qualitative KPIs for a given projectID
-   * @param {String} projectID 
-   * @returns {Array} - Array of qualitative KPIs
-   */
-  async function getQualitativeKPIs(projectID) {
-    const params = {
-      TableName: 'projects',
-      Key: {
-        'projectID': projectID
-      }
-    };
+}
 
-    try {
-      const data = await docClient.get(params).promise();
-      return data.Item.qualitativeKPIs;
-    } catch (err) {
-      console.log('Error querying DynamoDB', err);
+async function addRisks(projectID, riskObject) {
+  const params = {
+    TableName: 'projects',
+    Key: {
+      'projectID': projectID
     }
+  };
+
+  try {
+    const data = await docClient.get(params).promise();
+    const project = data.Item;
+
+    if (project) {
+      // Assuming the risks are stored in a "risks" field in the project object
+      project.risks = [...project.risks, riskObject];
+
+      const updateParams = {
+        TableName: 'projects',
+        Key: {
+          'projectID': projectID
+        },
+        UpdateExpression: 'set risks = :r',
+        ExpressionAttributeValues: {
+          ':r': project.risks
+        },
+        ReturnValues: 'UPDATED_NEW'
+      };
+
+      const updateResult = await docClient.update(updateParams).promise();
+      return updateResult.Attributes.risks;
+    } else {
+      console.error(`Project with ID ${projectID} not found`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error updating project with ID ${projectID}`, error);
+    return null;
   }
 
-  async function addQualitativeKPI(projectID, tableName, newEntry) {
-    // Retrieve the current qualitative KPIs for the project
-    const currentKPIs = await getQualitativeKPIs(projectID);
-  
-    // Append the new entry to the specified table
-    appendToTable(currentKPIs, tableName, newEntry);
-    console.log(currentKPIs);
-    // Update the qualitative KPIs in DynamoDB
-    const params = {
-      TableName: 'projects',
-      Key: {
-        'projectID': projectID
-      },
-      UpdateExpression: 'SET qualitativeKPIs = :kpi',
-      ExpressionAttributeValues: {
-        ':kpi': currentKPIs
-      }
-    };
-  
-    try {
-      await docClient.update(params).promise();
-      console.log(`Added new entry to ${tableName} table for project ${projectID}`);
-    } catch (err) {
-      console.error(`Error updating qualitative KPIs for project ${projectID}`, err);
-    }
-  }
-  async function emptyRisks(projectID) {
-    updateProject(projectID, {qualitativeKPIs: [
-      {
-          "name": "Risks",
-          "table": [
-          ]
-      },
-      {
-          "name": "Issues",
-          "table": [
-          ]
-      },
-      {
-          "name": "Agenda Items",
-          "table": [
-          ]
-      }
-  ]})
-    
-    }
-  
-    async function editRisk(projectID, updatedRisk) {
-      try {
-        // Fetch the current project data
-        const qualitativeKPIS = await getQualitativeKPIs(projectID);
-    
-        // Find the risk to update
-        const riskKPI = qualitativeKPIs.find(kpi => kpi.name === 'Risks');
-        const riskToUpdate = riskKPI.table.find(risk => risk.recordNumber === updatedRisk.recordNumber);
-    
-        // If the risk doesn't exist, throw an error
-        if (!riskToUpdate) {
-          throw new Error(`Risk with record number ${updatedRisk.recordNumber} not found`);
-        }
-    
-        // Update the risk
-        Object.assign(riskToUpdate, updatedRisk);
-    
-        // Save the updated project data
-        await updateProject(projectID, project);
-      } catch (err) {
-        console.error(`Error updating risk for project ${projectID}`, err);
-      }
-    }
+}
 
+/**
+ * Finds the project associated to a risk by the risk's riskID, 
+ * changes the owner of that specific risk to be the orgAdmin from the orgAdmin section of the project, 
+ * and changes the current owner of that risk to instead be appended to that risk's viewer list.
+ * @param {String} riskID 
+ * @param {String} orgAdmin 
+ */
+async function escalateRisk(riskID) {
+  // Extract projectID from riskID
+  const projectID = riskID.split('-').slice(0, 2).join('-');
+  console.log('Project ID:', projectID);
+  // Get the project
+  try{
+  const project = await getProject(projectID);
+
+  // Find the risk within the project
+  const riskToUpdate = project.risks.find(risk => risk.recordNumber === riskID);
+  // If risk is not found, throw an error
+  if (!riskToUpdate) {
+    throw new Error(`Risk with record number ${riskID} not found in project ${projectID}`);
+  }
+
+  // Append the current owner to the viewer list
+  riskToUpdate.viewers.push(riskToUpdate.owner);
+
+  // Change the owner to the orgAdmin
+  riskToUpdate.owner = project.orgAdmin;
+
+  // Update the risk in the project
+  const updatedRisks = project.risks.map(risk => risk.recordNumber === riskID ? riskToUpdate : risk);
+
+  // Update the project in the database
+  await updateProject(projectID, { risks: updatedRisks });
+} catch (err) {
+  console.error(`Error escalating risk for project ${projectID}`, err);
+}
+}
+module.exports.escalateRisk = escalateRisk;
+
+ 
   // function updateItem(){
   //   const params = {
   //     Key: {
@@ -462,9 +490,10 @@ async function createDashboard(dashboardName, projectID, ownerid, category, colu
     findAllProjectIDs,
     getRandomInt,
     getUser,
-    queryProjectsWithUserId,
     createDashboard,
-    getQualitativeKPIs,
-    addQualitativeKPI,
-    emptyRisks,
+    addRisks,
+    getProjectRisks,
+    getUserProjects,
+    getUser,
+    escalateRisk,
   };

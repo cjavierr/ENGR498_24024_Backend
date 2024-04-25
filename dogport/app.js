@@ -68,15 +68,15 @@ app.post('/api/addUserToProject', (req, res) => {
  */
 app.get('/api/readUserProjects', async (req, res) => {
   try {
-    const userID = jwt.verify(req.cookies.token, "ibby").userID;
-    const projects = await db.queryProjectsWithUserId(userID);
+    const userName = jwt.verify(req.cookies.token, "ibby").userName;
+    const projects = await db.getUserProjects(userName);
     const ownerName =jwt.verify(req.cookies.token, "ibby").firstName;
     console.log('Projects:', projects);
     const projectRecords = projects.map((project, index) => ({
-      recordNumber: project.projectID, // Replace with actual property
-      owner: ownerName, // Replace with actual property
+      recordNumber: project.projectID, 
+      owner: project.projectOwner, 
       ownerOrg: project.projectName, // Replace with actual property
-      dashboardNumber: project.dashboards[0], // Replace with actual property
+      dashboardNumber: project.dashboards, // Replace with actual property
       dashboardName: "", // Replace with actual property
       escalate: "no", // Replace with actual property
     }));
@@ -107,7 +107,7 @@ app.post("/api/login", async (req, res) => {
   const token = jwt.sign(user, "ibby", { expiresIn: "1h" });
 
   res.cookie("token", token, {maxAge: 60 * 60 * 1000});
-
+  res.cookie("firstName", user.firstName, {maxAge: 60 * 60 * 1000});
   res.status(200).json();
 });
 
@@ -156,20 +156,16 @@ app.post('/api/getQualitativeKPI', async (req, res) => {
 app.get('/api/getRisks', async (req, res) => {
   try {
     const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const userFirstName = jwtInfo.firstName;
     const projects = jwtInfo.projects;
 
     let risks = [];
     for (const projectID of projects) {
-      const qualitativeKPI = await db.getQualitativeKPIs(projectID);
-
-      for (const item of qualitativeKPI) {
-      if (item.name === 'Risks') {
-        const riskItems = item.table.map(risk => {
-          const owner = risk.users[0];
-          return {...risk, projectID, owner};
-        });
-        risks.push(...riskItems);
-      }
+      const projectRisks = await db.getProjectRisks(projectID);
+      for (const item of projectRisks) {
+        if ((item.owner.includes(userFirstName)) || (item.viewers.includes(userFirstName))) {
+          risks.push(item);
+        }
       }
     }
     
@@ -181,19 +177,17 @@ app.get('/api/getRisks', async (req, res) => {
 });
 
 /**
- * POST to get add KPI's to kpi lists
- *  essentially creates a object from request and appends it to
- *  the respective KPI's table. Specify which KPI using tableName
+ * POST to get addd RIsk to risks list
  */
-app.post('/api/addKPI', async (req, res) => {
+app.post('/api/addRisk', async (req, res) => {
   try {
     const reqData = req.body;
+    const projectID = reqData.projectID;
     const jwtInfo = jwt.verify(req.cookies.token, "ibby");
-    projectID = reqData.projectID;
-    tableName = reqData.tableName;
     newEntry = reqData.newEntry;
-    newEntry.users = [jwtInfo.firstName]; // todo add userID from jwt for inital creation
-    await db.addQualitativeKPI(projectID, tableName, newEntry);
+    newEntry.owner = jwtInfo.firstName; // Making created of risk  owner
+    newEntry.viewers = []; 
+    await db.addRisks(projectID, newEntry);
 
     res.status(200)
   } catch (err) {
@@ -202,18 +196,16 @@ app.post('/api/addKPI', async (req, res) => {
   }
 });
 
-/**
- * POST to clear risks from the database
- */
-app.post('/api/clearRisks', async (req, res) => {
+app.post('/api/escalateRisk', async (req, res) => {  
   try {
     const reqData = req.body;
-    const projectID = reqData.projectID;
-    await db.emptyRisks(projectID);
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const riskID = reqData.riskID;
+    await db.escalateRisk(riskID);
 
-    res.status(200).json({ message: 'Risks cleared successfully' });
+    res.status(200)
   } catch (err) {
-    console.error('Error in clearRisks:', err);
+    console.error('Error in escalateRisk', err);
     res.status(500).json({ error: 'Internal server error' }); 
   }
 });
