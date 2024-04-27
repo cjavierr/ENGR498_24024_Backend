@@ -125,7 +125,7 @@ async function createItem(table, value) {
  * @param {String} lastName
  * @param {String} email
  */
-function createUser(userName, password, firstName, lastName, email) {
+function createUser(userName, password, firstName, lastName, email, isAdmin, manager, department) {
   userID = uuidv4();
   console.log("Creating New User with ID " + userID);
   const item = {
@@ -137,6 +137,9 @@ function createUser(userName, password, firstName, lastName, email) {
     email: email,
     projects: [],
     dashboards: [],
+    isAdmin: isAdmin,
+    manager: manager,
+    department: department,
   };
 
   createItem("users", item);
@@ -238,7 +241,7 @@ async function deleteProject(projectId) {
 async function createDashboard(dashboardDetails) {
   try {
     console.log("Creating New Dashboard: ", dashboardDetails.dashboardName);
-    const dashboardID = await generateDashboardID();
+    const dashboardID = await generateDashboardID(dashboardDetails.project);
     const item = {
       dashid: dashboardID,
       dashboardName: dashboardDetails.dashboardName,
@@ -307,13 +310,10 @@ async function generateProjectID() {
   }
 }
 
-async function generateDashboardID() {
+async function generateDashboardID(projectid) {
   console.log("Generating Dashboard ID");
   const dashboardID =
-    "DSH-" +
-    Math.floor(Math.random() * 99999) +
-    "-CAT-" +
-    Math.floor(Math.random() * 99999);
+    "DSH-" + Math.floor(Math.random() * 99999) + "-" + projectid;
   console.log("Attempting: " + dashboardID);
   const params = {
     TableName: "dashboards",
@@ -336,6 +336,52 @@ async function generateDashboardID() {
   } catch (err) {
     console.error("Error scanning DynamoDB table:", err);
     throw err; // Re-throw for error handling in the route or calling function
+  }
+}
+
+async function getGlossary() {
+  const params = {
+    TableName: "glossary",
+    KeyConditionExpression: "glossaryid = :glossaryid", // Change to glossaryid
+    ExpressionAttributeValues: {
+      ":glossaryid": "companyglossary", // Set the glossaryid value
+    },
+  };
+
+  try {
+    const data = await docClient.query(params).promise();
+    if (data.Items.length > 0) {
+      console.log(data.Items[0]);
+      return data.Items[0]; // return the first item if found
+    } else {
+      console.log("companyglossary not found");
+      return null; // return null if no item is found
+    }
+  } catch (err) {
+    console.error("Error querying DynamoDB table", err);
+  }
+}
+
+async function getOrganization() {
+  const params = {
+    TableName: "glossary",
+    KeyConditionExpression: "glossaryid = :glossaryid", // Change to glossaryid
+    ExpressionAttributeValues: {
+      ":glossaryid": "organizationglossary", // Set the glossaryid value
+    },
+  };
+
+  try {
+    const data = await docClient.query(params).promise();
+    if (data.Items.length > 0) {
+      console.log(data.Items[0]);
+      return data.Items[0]; // return the first item if found
+    } else {
+      console.log("organizationglossary not found");
+      return null; // return null if no item is found
+    }
+  } catch (err) {
+    console.error("Error querying DynamoDB table", err);
   }
 }
 
@@ -759,7 +805,6 @@ function findMyProjects(myUserID) {
   });
 }
 
-
 async function updateDashboard(dashboardDetails) {
   try {
     const params = {
@@ -780,17 +825,16 @@ async function updateDashboard(dashboardDetails) {
       },
     };
     console.log("Updating dashboard with parameters:", params);
-    
+
     const data = await docClient.put(params).promise();
     console.log("Dashboard updated successfully:", data);
-    
+
     return data;
   } catch (error) {
     console.error("Error updating dashboard:", error);
     throw error;
   }
 }
-
 
 async function updateProject(projectData) {
   console.log(projectData);
@@ -895,4 +939,6 @@ module.exports = {
   deleteProject,
   getUserDashboards,
   deleteDashboard,
+  getGlossary,
+  getOrganization
 };

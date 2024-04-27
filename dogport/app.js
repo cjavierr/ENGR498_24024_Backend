@@ -43,7 +43,8 @@ app.post("/api/newuser", (req, res) => {
     req.body.password,
     req.body.firstName,
     req.body.lastName,
-    req.body.email
+    req.body.email,
+    req.body.isAdmin
   );
   res.status(201).json({
     message: "User Created successfully",
@@ -101,7 +102,6 @@ app.get("/api/userProjects", async (req, res) => {
     });
   }
 });
-
 
 app.get("/api/userDashboards", async (req, res) => {
   console.log("retrieving user dashboards for: " + req.query.username);
@@ -171,6 +171,34 @@ app.post("/api/getUser", (req, res) => {
   console.log("Looking for user");
   console.log(req.body);
   db.getUser(req.body.username)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user");
+    });
+});
+
+app.get("/api/getCompanyGlossary", (req, res) => {
+  console.log("Looking for Company Glossary");
+  console.log(req.body);
+  db.getGlossary()
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user");
+    });
+});
+
+app.get("/api/getOrganizationGlossary", (req, res) => {
+  console.log("Looking for Organization Glossary");
+  console.log(req.body);
+  db.getOrganization()
     .then((data) => {
       console.log(data);
       res.send(data);
@@ -312,7 +340,6 @@ app.post("/api/saveDashboard", async (req, res) => {
   console.log("Saving Dashboard");
   console.log(req.body);
   try {
-
     // Update the dashboard entry in the DynamoDB table
     await db.updateDashboard(req.body);
 
@@ -323,7 +350,7 @@ app.post("/api/saveDashboard", async (req, res) => {
   }
 });
 
-app.post("/api/deleteDashboard", async (req,res) => {
+app.post("/api/deleteDashboard", async (req, res) => {
   console.log(req.body);
   console.log("Deleting Dashboard: ", req.body.dashid);
   try {
@@ -335,7 +362,7 @@ app.post("/api/deleteDashboard", async (req,res) => {
     console.error("Error updating Dashboard:", error);
     res.status(500).json({ message: "Failed to delete Dashboard" });
   }
-})
+});
 
 app.post("/api/saveProject", async (req, res) => {
   console.log("Updating Project Information");
@@ -345,7 +372,7 @@ app.post("/api/saveProject", async (req, res) => {
 
     // Update the project entry in the DynamoDB table
     await db.updateProject({
-      updatedProjectData
+      updatedProjectData,
     });
 
     res.status(200).json({ message: "Project updated successfully" });
