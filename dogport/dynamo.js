@@ -158,7 +158,6 @@ async function createProject(projectDetails) {
       ...projectDetails,
       projectID: projectID,
       dashboards: [],
-      risks: [],
     };
     console.log("Creating New Project: ", item);
 
