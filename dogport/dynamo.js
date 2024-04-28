@@ -1010,7 +1010,7 @@ async function getProjectRisks(projectID) {
 
     if (project) {
       // Assuming the risks are stored in a "risks" field in the project object
-      return project.risks;
+      return project.KPIs.qualitative.Risks;
     } else {
       console.error(`Project with ID ${projectID} not found`);
       return null;
@@ -1036,7 +1036,8 @@ async function addRisks(projectID, riskObject) {
 
     if (project) {
       // Assuming the risks are stored in a "risks" field in the project object
-      project.risks = [...project.risks, riskObject];
+      console.log("addRisks: " + project, project.KPIs.qualitative.Risks);
+      project.KPIs.qualitative.Risks = [...project.KPIs.qualitative.Risks, riskObject];
 
       const updateParams = {
         TableName: 'projects',
@@ -1045,7 +1046,7 @@ async function addRisks(projectID, riskObject) {
         },
         UpdateExpression: 'set risks = :r',
         ExpressionAttributeValues: {
-          ':r': project.risks
+          ':r': project.KPIs.qualitative.Risks
         },
         ReturnValues: 'UPDATED_NEW'
       };
@@ -1078,7 +1079,7 @@ async function escalateRisk(riskID) {
   const project = await getProject(projectID);
 
   // Find the risk within the project
-  const riskToUpdate = project.risks.find(risk => risk.recordNumber === riskID);
+  const riskToUpdate = project.KPIs.qualitative.Risks.find(risk => risk.recordNumber === riskID);
   // If risk is not found, throw an error
   if (!riskToUpdate) {
     throw new Error(`Risk with record number ${riskID} not found in project ${projectID}`);
@@ -1112,7 +1113,7 @@ async function escalateRisk(riskID) {
 async function editRisk( riskID, riskObject) {
   const projectID = riskID.split('-').slice(0, 2).join('-');
   const project = await getProject(projectID);
-  const risks = project.risks;
+  const risks = project.KPIs.qualitative.Risks;
 
   // Find the risk with the given recordNumber and replace it with the new riskObject
   for (let i = 0; i < risks.length; i++) {
@@ -1127,7 +1128,7 @@ async function editRisk( riskID, riskObject) {
     Key: {
       'projectID': projectID
     },
-    UpdateExpression: 'set risks = :risks',
+    UpdateExpression: 'set KPIs.qualitative.Risks = :risks',
     ExpressionAttributeValues: {
       ':risks': risks
     },
@@ -1165,5 +1166,8 @@ module.exports = {
   getUserDashboards,
   deleteDashboard,
   getGlossary,
-  getOrganization
+  getOrganization,
+  getProjectRisks,
+  addRisks,
+  editRisk,
 };

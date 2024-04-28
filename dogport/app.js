@@ -485,6 +485,34 @@ app.get('/api/getRisks', async (req, res) => {
 });
 
 /**
+ * POST to get Risks from project ID using getQualitaitiveKPI
+ */
+app.get('/api/getProjectRisks', async (req, res) => {
+  try {
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const userFirstName = jwtInfo.userName;
+    const projectId = req.query.projectId;
+    
+    let risks = [];
+      const projectRisks = await db.getProjectRisks(projectId);
+      if(  projectRisks == undefined || projectRisks.length == 0) { 
+        null
+      } else {
+      for (const item of projectRisks) {
+        if ((item.owner && item.owner == userFirstName) || (item.viewers && item.viewers.includes(userFirstName))) {
+          risks.push(item);
+        }
+      }
+      }
+    
+    res.status(200).json({ risks }); // Sending risks table as JSON response
+  } catch (err) {
+    console.error('Error in getProjectRisks:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
  * POST to get addd RIsk to risks list
  */
 app.post('/api/addRisk', async (req, res) => {
@@ -507,7 +535,6 @@ app.post('/api/addRisk', async (req, res) => {
 app.post('/api/escalateRisk', async (req, res) => {  
   try {
     const reqData = req.body;
-    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
     const riskID = reqData.riskID;
     await db.escalateRisk(riskID);
 
@@ -525,7 +552,6 @@ app.post('/api/editRisk', async (req, res) => {
   try {
     const reqData = req.body;
     const newEntry = reqData.newEntry;
-    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
     const riskID = newEntry.recordNumber;
     await db.editRisk(riskID, newEntry);
 
