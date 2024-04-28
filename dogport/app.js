@@ -147,7 +147,8 @@ app.get('/api/readUserProjects', async (req, res) => {
     console.error('Error in readUserProjects:', err);
     res.status(500).json({ error: 'Internal server error' }); // Sending an error response
   }
-
+  });
+  
 app.get("/api/allUserIDs", (req, res) => {
   console.log("Looking for all UserIds");
   db.findAllUserIds()
