@@ -126,7 +126,27 @@ app.get("/api/userDashboards", async (req, res) => {
 /**
  *
  */
-app.get("/api/readUserProjects", (req, res) => {});
+app.get('/api/readUserProjects', async (req, res) => {
+  try {
+    const userName = jwt.verify(req.cookies.token, "ibby").userName;
+    const projects = await db.getUserProjects(userName);
+    const ownerName =jwt.verify(req.cookies.token, "ibby").firstName;
+    console.log('Projects:', projects);
+    const projectRecords = projects.map((project, index) => ({
+      recordNumber: project.projectID, 
+      owner: project.projectOwner, 
+      ownerOrg: project.projectName, // Replace with actual property
+      dashboardNumber: project.dashboards, // Replace with actual property
+      dashboardName: "", // Replace with actual property
+      escalate: "no", // Replace with actual property
+    }));
+    console.log('Projects:', projects);
+    
+    res.status(200).json({ projectRecords }); // Sending projects as JSON response
+  } catch (err) {
+    console.error('Error in readUserProjects:', err);
+    res.status(500).json({ error: 'Internal server error' }); // Sending an error response
+  }
 
 app.get("/api/allUserIDs", (req, res) => {
   console.log("Looking for all UserIds");
@@ -242,7 +262,7 @@ app.post("/api/login", async (req, res) => {
   const token = jwt.sign(user, "ibby", { expiresIn: "1h" });
 
   res.cookie("token", token, { maxAge: 60 * 60 * 1000 });
-
+  res.cookie("firstName", user.userName, {maxAge: 60 * 60 * 1000});
   res.status(200).json({ success: true });
 });
 
@@ -431,5 +451,86 @@ app.post("/api/mergeDashboards", async (req, res) => {
   } catch (error) {
     console.error("Error merging dashboards:", error);
     res.status(500).send("Failed to merge dashboards. Please try again.");
+  }
+});
+
+/**
+ * POST to get Risks from project ID using getQualitaitiveKPI
+ */
+app.get('/api/getRisks', async (req, res) => {
+  try {
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const userFirstName = jwtInfo.userName;
+    const projects = jwtInfo.projects;
+
+    let risks = [];
+    for (const projectID of projects) {
+      const projectRisks = await db.getProjectRisks(projectID);
+      if(  projectRisks == undefined || projectRisks.length == 0) { 
+        continue;
+      }
+      for (const item of projectRisks) {
+        if ((item.owner && item.owner == userFirstName) || (item.viewers && item.viewers.includes(userFirstName))) {
+          risks.push(item);
+        }
+      }
+    }
+    
+    res.status(200).json({ risks }); // Sending risks table as JSON response
+  } catch (err) {
+    console.error('Error in getRisks:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to get addd RIsk to risks list
+ */
+app.post('/api/addRisk', async (req, res) => {
+  try {
+    const reqData = req.body;
+    const projectID = reqData.projectID;
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    newEntry = reqData.newEntry;
+    newEntry.owner = jwtInfo.userName; // Making created of risk  owner
+    newEntry.viewers = []; 
+    await db.addRisks(projectID, newEntry);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in addQualitativeKPI:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+app.post('/api/escalateRisk', async (req, res) => {  
+  try {
+    const reqData = req.body;
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const riskID = reqData.riskID;
+    await db.escalateRisk(riskID);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in escalateRisk', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+/**
+ * POST to edit a risk
+ */
+app.post('/api/editRisk', async (req, res) => {
+  try {
+    const reqData = req.body;
+    const newEntry = reqData.newEntry;
+    const jwtInfo = jwt.verify(req.cookies.token, "ibby");
+    const riskID = newEntry.recordNumber;
+    await db.editRisk(riskID, newEntry);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in editRisk:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
   }
 });
