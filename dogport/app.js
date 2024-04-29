@@ -487,9 +487,7 @@ app.get('/api/getProjectRisks', async (req, res) => {
         null
       } else {
       for (const item of projectRisks) {
-        if ((item.owner && item.owner == userFirstName) || (item.viewers && item.viewers.includes(userFirstName))) {
           risks.push(item);
-        }
       }
       }
     

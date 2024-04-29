@@ -1076,40 +1076,87 @@ async function addRisks(projectID, riskObject) {
  * @param {String} orgAdmin 
  */
 async function escalateRisk(riskID) {
-  // Extract projectID from riskID
-  const projectID = riskID.split('-').slice(0, 2).join('-');
-  // Get the project
+  const params = {
+    TableName: 'risks',
+    Key: {
+      'riskid': riskID
+    }
+  };
+  
+  let riskData;
+
+  try {
+    const data = await docClient.get(params).promise();
+    riskData = data.Item;
+    projectID = riskData.projectid;
+  } catch (error) {
+    console.error(`Error getting risk with ID ${riskID}`, error);
+    throw error;
+  }
+
   try{
   const project = await getProject(projectID);
 
   // Find the risk within the project
-  const riskToUpdate = project.KPIs.qualitative.Risks.find(risk => risk.recordNumber === riskID);
+  const riskToUpdate = project.KPIs.qualitative.Risks.find(risk => risk.riskid === riskID);
   // If risk is not found, throw an error
   if (!riskToUpdate) {
     throw new Error(`Risk with record number ${riskID} not found in project ${projectID}`);
   }
   
   const originalOwner = riskToUpdate.owner;
+
+  const userObject = await getUser(originalOwner);
+
   // Append the current owner to the viewer list
   riskToUpdate.viewers.push(riskToUpdate.owner);
 
   // Change the owner to the orgAdmin
-  riskToUpdate.owner = project.orgAdmin;
+  riskToUpdate.owner = userObject.manager;
 
   riskToUpdate.notes += ` Escalated by ${originalOwner} to ${riskToUpdate.owner}.`;
 
   // Update the risk in the project
-  const updatedRisks = project.risks.map(risk => risk.recordNumber === riskID ? riskToUpdate : risk);
+  const updatedRisks = project.KPIs.qualitative.Risks.map(risk => risk.riskid === riskID ? riskToUpdate : risk);
 
+  const updateObject = {
+    'KPIs.qualitative.Risks': updatedRisks
+  };
   // Update the project in the database
-  await updateProject(projectID, { risks: updatedRisks });
+  //await updateProject(projectID, updateObject);
+
+  // When updating the item in DynamoDB
+  const params = {
+    TableName: 'projects',
+    Key: { 'projectID': projectID },
+    UpdateExpression: 'SET KPIs.qualitative.Risks = :r',
+    ExpressionAttributeValues: {
+      ':r': updatedRisks
+    },
+    ReturnValues: 'ALL_NEW' // Optional, to get the updated item in the response
+  };
+  
+  docClient.update(params, function(err, data) {
+    if (err) {
+      console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+    } else {
+      console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+    }
+  });
+
+  // update the risk in the risks table
+  await updateRisk(riskID, {
+    'owner': riskToUpdate.owner,
+    'viewers': riskToUpdate.viewers,
+    'notes': riskToUpdate.notes
+  });
 } catch (err) {
-  console.error(`Error escalating risk for project ${projectID}`, err);
+  console.error(`Error escalating risk for risk ${projectID}`, err);
 }
 }
 
 /**
- * Edits a risk within a project with a specific riskID parameter, and a risk object to replace it with
+ * Edits a risk within a project with a specific riskID parameter, and a risk object to replace it with TODO fix
  * @param {String} projectID 
  * @param {String} riskID 
  * @param {Object} riskObject 
@@ -1147,6 +1194,36 @@ async function editRisk( riskID, riskObject) {
   }
 }
 
+async function updateRisk(riskID, updateObject) {
+  const params = {
+    TableName: 'risks',
+    Key: {
+      'riskid': riskID
+    },
+    ExpressionAttributeNames: {},
+    ExpressionAttributeValues: {},
+    UpdateExpression: 'SET',
+  };
+
+  let prefix = '';
+  const attributes = Object.keys(updateObject);
+  for (let i = 0; i < attributes.length; i++) {
+    params.UpdateExpression += prefix + '#' + attributes[i] + ' = :' + attributes[i];
+    params.ExpressionAttributeNames['#' + attributes[i]] = attributes[i];
+    params.ExpressionAttributeValues[':' + attributes[i]] = updateObject[attributes[i]];
+    prefix = ', ';
+  }
+
+  try {
+    const data = await docClient.update(params).promise();
+    console.log('Risk updated successfully', data);
+  } catch (err) {
+    console.error('Error updating risk in DynamoDB', err);
+    throw err;
+  }
+}
+
+module.exports.updateRisk = updateRisk;
 // async function addRiskToUser(riskID, username) {
 //   try {
 //     // Get the user object
@@ -1222,4 +1299,5 @@ module.exports = {
   addRisks,
   editRisk,
   getUserRisks,
+  escalateRisk,
 };
