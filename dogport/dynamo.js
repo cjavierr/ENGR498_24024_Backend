@@ -1024,7 +1024,7 @@ async function getProjectRisks(projectID) {
 
 async function addRisks(projectID, riskObject) {
   const params = {
-    TableName: 'projects',
+    TableName: 'risks',
     Key: {
       'projectID': projectID
     }
@@ -1042,16 +1042,19 @@ async function addRisks(projectID, riskObject) {
       const updateParams = {
         TableName: 'projects',
         Key: {
-          'projectID': projectID
+          'projectID': project.projectID
         },
-        UpdateExpression: 'set risks = :r',
+        UpdateExpression: 'set KPIs.qualitative.Risks = :r',
         ExpressionAttributeValues: {
           ':r': project.KPIs.qualitative.Risks
         },
         ReturnValues: 'UPDATED_NEW'
       };
-
+      
       const updateResult = await docClient.update(updateParams).promise();
+      riskObject.projectid = projectID;
+      createItem('risks', riskObject);
+      addRiskToUser(riskObject.riskid, riskObject.owner);
       return updateResult.Attributes.risks;
     } else {
       console.error(`Project with ID ${projectID} not found`);
@@ -1143,7 +1146,33 @@ async function editRisk( riskID, riskObject) {
   }
 }
 
-module.exports.editRisk = editRisk;
+async function addRiskToUser(riskID, username) {
+  try {
+    // Get the user object
+    const user = await getUser(username);
+    
+    // Add the riskID to the user's risks array
+    user.risks.push(riskID);
+    
+    // Update the user object in the users table
+    const params = {
+      TableName: 'users',
+      Key: {
+        'userID': user.userID
+      },
+      UpdateExpression: 'SET risks = :risks',
+      ExpressionAttributeValues: {
+        ':risks': user.risks
+      },
+      ReturnValues: 'UPDATED_NEW'
+    };
+    
+    const result = await docClient.update(params).promise();
+    console.log('Risk added to user:', result);
+  } catch (error) {
+    console.error('Error adding risk to user:', error);
+  }
+}
 
 module.exports = {
   createUser,
