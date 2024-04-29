@@ -216,6 +216,20 @@ app.get("/api/getCompanyGlossary", (req, res) => {
     });
 });
 
+app.post("/api/updateCompanyGlossaryKPIs", (req, res) => {
+  console.log("Updating for Company Glossary");
+  console.log(req.body);
+  db.updateGlossaryKPIs(req.body)
+    .then((data) => {
+      console.log(data);
+      res.send(data);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.status(500).send("Error retrieving user");
+    });
+});
+
 app.get("/api/getOrganizationGlossary", (req, res) => {
   console.log("Looking for Organization Glossary");
   console.log(req.body);
@@ -418,6 +432,10 @@ app.post("/api/deleteProject", async (req, res) => {
     res.status(500).json({ message: "Failed to delete project" });
   }
 });
+
+app.post("/api/updateCompanyGlossary", async (req, res) =>{
+  console.log("Updating Company KPIs");
+})
 
 app.post("/api/mergeDashboards", async (req, res) => {
   console.log("Merging Dashboards");
