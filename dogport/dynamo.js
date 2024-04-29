@@ -1166,9 +1166,9 @@ async function editRisk( riskID, riskObject) {
   const project = await getProject(projectID);
   const risks = project.KPIs.qualitative.Risks;
 
-  // Find the risk with the given recordNumber and replace it with the new riskObject
+  // Find the risk with the given riskid and replace it with the new riskObject
   for (let i = 0; i < risks.length; i++) {
-    if (risks[i].recordNumber === riskID) {
+    if (risks[i].riskid === riskID) {
       risks[i] = riskObject;
       break;
     }
@@ -1188,10 +1188,14 @@ async function editRisk( riskID, riskObject) {
 
   try {
     const data = await docClient.update(params).promise();
-    console.log('Risk updated successfully', data);
   } catch (err) {
     console.error('Error updating risk in DynamoDB', err);
   }
+
+  // Create a copy of riskObject without the riskid attribute
+  const { riskid, ...updateObject } = riskObject;
+
+  await updateRisk(riskID, updateObject);
 }
 
 async function updateRisk(riskID, updateObject) {
@@ -1273,6 +1277,50 @@ async function getUserRisks(username) {
   }
 }
 
+async function deleteRisk(riskID) {
+  const projectID = riskID.split('-').slice(0, 2).join('-');
+
+  try {
+    // Get the current project data
+    const getProjectParams = {
+      TableName: 'projects',
+      Key: { 'projectID': projectID }
+    };
+    const projectData = await docClient.get(getProjectParams).promise();
+    const currentRisks = projectData.Item.KPIs.qualitative.Risks;
+
+    // Filter out the risk you want to remove
+    const updatedRisks = currentRisks.filter(risk => risk.riskid !== riskID);
+
+    // Update the project with the new risks list
+    const projectParams = {
+      TableName: 'projects',
+      Key: { 'projectID': projectID },
+      UpdateExpression: 'SET KPIs.qualitative.Risks = :updatedRisks',
+      ExpressionAttributeValues: {
+        ':updatedRisks': updatedRisks
+      },
+      ReturnValues: 'UPDATED_NEW'
+    };
+    await docClient.update(projectParams).promise();
+  } catch (err) {
+    console.error('Error deleting risk from project in DynamoDB', err);
+    throw err;
+  }
+
+  // Delete risk from 'risks' table
+  try {
+    const riskParams = {
+      TableName: 'risks',
+      Key: { 'riskid': riskID }
+    };
+    await docClient.delete(riskParams).promise();
+  } catch (err) {
+    console.error('Error deleting risk from risks table in DynamoDB', err);
+    throw err;
+  }
+}
+
 module.exports = {
   createUser,
   createProject,
@@ -1300,4 +1348,5 @@ module.exports = {
   editRisk,
   getUserRisks,
   escalateRisk,
+  deleteRisk,
 };

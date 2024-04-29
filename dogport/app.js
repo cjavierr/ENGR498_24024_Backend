@@ -538,12 +538,25 @@ app.post('/api/editRisk', async (req, res) => {
   try {
     const reqData = req.body;
     const newEntry = reqData.newEntry;
-    const riskID = newEntry.recordNumber;
+    const riskID = newEntry.riskid;
     await db.editRisk(riskID, newEntry);
 
     res.status(200)
   } catch (err) {
     console.error('Error in editRisk:', err);
+    res.status(500).json({ error: 'Internal server error' }); 
+  }
+});
+
+app.post('/api/deleteRisk', async (req, res) => {
+  try {
+    const reqData = req.body;
+    const riskID = reqData.riskid;
+    await db.deleteRisk(riskID);
+
+    res.status(200)
+  } catch (err) {
+    console.error('Error in deleteRisk', err);
     res.status(500).json({ error: 'Internal server error' }); 
   }
 });
