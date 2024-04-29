@@ -455,18 +455,21 @@ async function findAllUserIds() {
 async function findAllUsernames() {
   const params = {
     TableName: "users",
-    ProjectionExpression: "userName",
+    ProjectionExpression: "userName, isAdmin",
   };
 
   try {
-    const data = await docClient.scan(params).promise(); // Use .promise() for chaining
-    const usernames = data.Items.map((item) => item.userName);
+    const data = await docClient.scan(params).promise();
+    const usernames = data.Items
+      .filter(item => !item.isAdmin) // Filter out users with isAdmin set to true
+      .map(item => item.userName);
     return usernames;
   } catch (err) {
     console.error("Error scanning DynamoDB table", err);
-    throw err; // Re-throw for error handling in the route
+    throw err;
   }
 }
+
 
 /**
  * Finds a user and returns their user object from user table
@@ -518,15 +521,32 @@ async function getProject(projectID) {
   }
 }
 
-async function createMilestone(projectID, milestone) {}
+async function updateGlossaryKPIs(glossaryData) {
+  console.log("Updating glossary in the backend with data: ", glossaryData);
+  try {
+    const params = {
+      TableName: 'glossary', // Replace 'your_table_name' with your actual table name
+      Key: {
+        glossaryid: 'companyglossary', // Replace 'your_primary_key_value' with the actual primary key value
+      },
+      UpdateExpression: 'SET quantitativekpis = :quantitativekpis, qualitativekpis = :qualitativekpis', // Set the attributes to be updated
+      ExpressionAttributeValues: {
+        ':quantitativekpis': glossaryData.quantitativekpis, // Set the new value for the quantitativeKPIs attribute
+        ':qualitativekpis': glossaryData.qualitativekpis, // Set the new value for the qualitativeKPIs attribute
+      },
+      ReturnValues: 'ALL_NEW', // Return all attributes of the updated item
+    };
 
-async function addSubcategory(projectID, subcategory) {}
+    // Update the item in the DynamoDB table
+    const data = await docClient.update(params).promise();
 
-async function generateMilestoneReport() {}
+    // Return the updated item
+    return data.Attributes;
+  } catch (error) {
+    throw error; // Throw the error to be caught by the calling function
+  }
+}
 
-async function createRisk() {}
-
-async function editMilestone() {}
 
 async function deleteDashboard(dashboardID) {
   console.log("Attempting to delete dashboard:", dashboardID);
@@ -1165,5 +1185,6 @@ module.exports = {
   getUserDashboards,
   deleteDashboard,
   getGlossary,
-  getOrganization
+  getOrganization,
+  updateGlossaryKPIs
 };
