@@ -456,26 +456,14 @@ app.post("/api/mergeDashboards", async (req, res) => {
 });
 
 /**
- * POST to get Risks from project ID using getQualitaitiveKPI
+ * POST to get Risks from risks table
  */
 app.get('/api/getRisks', async (req, res) => {
   try {
     const jwtInfo = jwt.verify(req.cookies.token, "ibby");
-    const userFirstName = jwtInfo.userName;
-    const projects = jwtInfo.projects;
+    const userName = jwtInfo.userName;
 
-    let risks = [];
-    for (const projectID of projects) {
-      const projectRisks = await db.getProjectRisks(projectID);
-      if(  projectRisks == undefined || projectRisks.length == 0) { 
-        continue;
-      }
-      for (const item of projectRisks) {
-        if ((item.owner && item.owner == userFirstName) || (item.viewers && item.viewers.includes(userFirstName))) {
-          risks.push(item);
-        }
-      }
-    }
+    const risks = await db.getUserRisks(userName)
     
     res.status(200).json({ risks }); // Sending risks table as JSON response
   } catch (err) {
@@ -527,7 +515,7 @@ app.post('/api/addRisk', async (req, res) => {
 
     res.status(200)
   } catch (err) {
-    console.error('Error in addQualitativeKPI:', err);
+    console.error('Error in addRisk:', err);
     res.status(500).json({ error: 'Internal server error' }); 
   }
 });
