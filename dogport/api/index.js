@@ -529,7 +529,7 @@ app.post('/api/addRisk', async (req, res) => {
     newEntry.owner = jwtInfo.userName; // Making created of risk  owner
     newEntry.viewers = []; 
     await db.addR
-    isks(projectID, newEntry);
+    risks(projectID, newEntry);
 
     res.status(200)
   } catch (err) {
