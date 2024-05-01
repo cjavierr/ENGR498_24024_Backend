@@ -118,7 +118,7 @@ async function createItem(table, value) {
  * @param {String} lastName
  * @param {String} email
  */
-function createUser(userName, password, firstName, lastName, email, isAdmin, manager, department) {
+async function createUser(userName, password, firstName, lastName, email, isAdmin, manager) {
   userID = uuidv4();
   console.log("Creating New User with ID " + userID + " and manager: " + manager);
   const item = {
@@ -132,10 +132,9 @@ function createUser(userName, password, firstName, lastName, email, isAdmin, man
     dashboards: [],
     isAdmin: isAdmin,
     manager: manager,
-    department: department,
   };
 
-  createItem("users", item);
+  await createItem("users", item);
 }
 
 /**

@@ -38,20 +38,26 @@ app.listen(port, () => {
 /**
  * Api call to create a new user
  */
-app.post("/api/newuser", (req, res) => {
-  db.createUser(
-    req.body.userName,
-    req.body.password,
-    req.body.firstName,
-    req.body.lastName,
-    req.body.email,
-    req.body.isAdmin,
-    req.body.manager,
-    req.body.department 
-  );
-  res.status(201).json({
-    message: "User Created successfully",
-  });
+app.post("/api/newuser", async (req, res) => {
+  try {
+    await db.createUser(
+      req.body.userName,
+      req.body.password,
+      req.body.firstName,
+      req.body.lastName,
+      req.body.email,
+      req.body.isAdmin,
+      req.body.manager,
+    );
+    res.status(201).json({
+      message: "User Created successfully",
+    });
+  } catch (err) {
+    console.error("Error creating user", err);
+    res.status(500).json({
+      message: "Error creating user",
+    });
+  }
 });
 
 /**
