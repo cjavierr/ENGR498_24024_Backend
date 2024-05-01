@@ -6,3 +6,4 @@ logs/
 
 # Ignore environment-specific files
 .env
+.vercel
