@@ -103,15 +103,8 @@ async function createItem(table, value) {
   console.log("Creating", params);
 
   try {
-    const data = await docClient
-      .put(params, (err, data) => {
-        if (err) {
-          console.error("Error adding item to DynamoDB", err);
-        } else {
-          console.log("Item added successfully", data);
-        }
-      })
-      .promise(); // Use .promise() for chaining
+    const data = await docClient.put(params).promise(); // Use .promise() for chaining
+    console.log("Item created successfully", data);
   } catch (err) {
     console.error("Error putting DynamoDB table", err);
     throw err;
