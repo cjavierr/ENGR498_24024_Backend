@@ -44,7 +44,9 @@ app.post("/api/newuser", (req, res) => {
     req.body.firstName,
     req.body.lastName,
     req.body.email,
-    req.body.isAdmin
+    req.body.isAdmin,
+    req.body.manager,
+    req.body.depatment
   );
   res.status(201).json({
     message: "User Created successfully",
