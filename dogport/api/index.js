@@ -277,7 +277,7 @@ app.post("/api/login", async (req, res) => {
 
   const token = jwt.sign(user, "ibby", { expiresIn: "1h" });
 
-  res.cookie("token", token, { maxAge: 60 * 60 * 1000 });
+  res.cookie("token", token, { maxAge: 60 * 60 * 1000, sameSite: 'None', secure: true });
   res.cookie("firstName", user.userName, {maxAge: 60 * 60 * 1000});
   res.status(200).json({ success: true });
 });
@@ -528,7 +528,8 @@ app.post('/api/addRisk', async (req, res) => {
     newEntry = reqData.newEntry;
     newEntry.owner = jwtInfo.userName; // Making created of risk  owner
     newEntry.viewers = []; 
-    await db.addRisks(projectID, newEntry);
+    await db.addR
+    isks(projectID, newEntry);
 
     res.status(200)
   } catch (err) {
